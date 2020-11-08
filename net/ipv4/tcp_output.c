@@ -39,6 +39,7 @@
 
 #include <net/tcp.h>
 #include <net/mptcp.h>
+#include <net/tdtcp.h>
 
 #include <linux/compiler.h>
 #include <linux/gfp.h>
@@ -46,6 +47,8 @@
 #include <linux/static_key.h>
 
 #include <trace/events/tcp.h>
+
+#include "../tdtcp/options.h"
 
 /* Refresh clocks of a TCP socket,
  * ensuring monotically increasing values.
@@ -416,6 +419,7 @@ static inline bool tcp_urg_mode(const struct tcp_sock *tp)
 #define OPTION_FAST_OPEN_COOKIE	(1 << 8)
 #define OPTION_SMC		(1 << 9)
 #define OPTION_MPTCP		(1 << 10)
+#define OPTION_TDTCP		(1 << 11)
 
 static void smc_options_write(__be32 *ptr, u16 *options)
 {
@@ -442,6 +446,7 @@ struct tcp_out_options {
 	__u32 tsval, tsecr;	/* need to include OPTION_TS */
 	struct tcp_fastopen_cookie *fastopen_cookie;	/* Fast open cookie */
 	struct mptcp_out_options mptcp;
+	struct tdtcp_out_options tdtcp;
 };
 
 static void mptcp_options_write(__be32 *ptr, struct tcp_out_options *opts)
@@ -449,6 +454,17 @@ static void mptcp_options_write(__be32 *ptr, struct tcp_out_options *opts)
 #if IS_ENABLED(CONFIG_MPTCP)
 	if (unlikely(OPTION_MPTCP & opts->options))
 		mptcp_write_options(ptr, &opts->mptcp);
+#endif
+}
+
+static void tdtcp_options_write(__be32 *ptr, struct tcp_out_options *opts)
+{
+#if IS_ENABLED(CONFIG_TDTCP)
+	/* If OPTIONS_TDTCP is allowed (marked as 1 in opts->options bitmask),
+	 * write the TDTCP option into the packet header.
+	 */
+	if (unlikely(OPTION_TDTCP & opts->options))
+		tdtcp_write_options(ptr, &opts->tdtcp);
 #endif
 }
 
@@ -562,6 +578,8 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 	smc_options_write(ptr, &options);
 
 	mptcp_options_write(ptr, opts);
+
+	tdtcp_options_write(ptr, opts);
 }
 
 static void smc_set_option(const struct tcp_sock *tp,
@@ -691,6 +709,16 @@ static unsigned int tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 		}
 	}
 
+	/* Only computes TDTCP options when the socket has TDTCP enabled. */
+	if (sk_is_tdtcp(sk)) {
+		unsigned int size;
+
+		if (tdtcp_syn_options(&size, &opts->tdtcp)) {
+			opts->options |= OPTION_TDTCP;
+			remaining -= size;
+		}
+	}
+
 	return MAX_TCP_OPTION_SPACE - remaining;
 }
 
@@ -756,6 +784,16 @@ static unsigned int tcp_synack_options(const struct sock *sk,
 
 	mptcp_set_option_cond(req, opts, &remaining);
 
+	if (rsk_is_tdtcp(req)) {
+		unsigned int size;
+		if (tdtcp_synack_options(&size, &opts->tdtcp)) {
+			if (remaining >= size) {
+				opts->options |= OPTION_TDTCP;
+				remaining -= size;
+			}
+		}
+	}
+
 	smc_set_option_cond(tcp_sk(sk), ireq, opts, &remaining);
 
 	return MAX_TCP_OPTION_SPACE - remaining;
@@ -806,6 +844,22 @@ static unsigned int tcp_established_options(struct sock *sk, struct sk_buff *skb
 		if (mptcp_established_options(sk, skb, &opt_size, remaining,
 					      &opts->mptcp)) {
 			opts->options |= OPTION_MPTCP;
+			size += opt_size;
+		}
+	}
+
+	/* TDTCP options have precedence over SACK for the limited TCP option
+	 * space. Though this is placed after MPTCP, which also takes a large
+	 * chunk of header space, the two are not expected to co-exist. MPTCP
+	 * is expected to be disabled when TDTCP is enabled.
+	 */
+	if (sk_is_tdtcp(sk)) {
+		unsigned int remaining = MAX_TCP_OPTION_SPACE - size;
+		unsigned int opt_size = 0;
+
+		if (tdtcp_established_options(sk, skb, &opt_size, remaining,
+					      &opts->tdtcp)) {
+			opts->options |= OPTION_TDTCP;
 			size += opt_size;
 		}
 	}
@@ -3528,6 +3582,31 @@ static void tcp_connect_init(struct sock *sk)
 		tp->rcv_tstamp = tcp_jiffies32;
 	tp->rcv_wup = tp->rcv_nxt;
 	WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
+
+#if IS_ENABLED(CONFIG_TDTCP)
+	/* If TDTCP is enabled in kernel config, then a new connection is by
+	 * default TDTCP.
+	 */
+	tp->is_tdtcp = true;
+	tp->num_tdns = TDTCP_NUM_TDNS;
+#else
+	/* Default value when TDTCP is disabled in kernel config. */
+	tp->is_tdtcp = false;
+	tp->num_tdns = 0;
+#endif
+	/* TDTCP is default enabled locally. If the other side does not use
+	 * TDTCP, then fall back to disabled. tp->rx_opt will be updated when
+	 * we hear back from the other side.
+	 */
+	tp->rx_opt.tdtcp_ok = false;
+	tp->rx_opt.num_tdns = 0;
+	/* TDTCP connection is marked fully established after client has
+	 * constructed ACK.
+	 */
+	tp->tdtcp_fully_established = false;
+	pr_debug("tcp_connect_init() is_tdtcp=%u num_tdns=%u rx_opt.tdtcp_ok=%u "
+		 "rx_opt.num_tdns=%u.", tp->is_tdtcp, tp->num_tdns,
+		 tp->rx_opt.tdtcp_ok, tp->rx_opt.num_tdns);
 
 	inet_csk(sk)->icsk_rto = tcp_timeout_init(sk);
 	inet_csk(sk)->icsk_retransmits = 0;

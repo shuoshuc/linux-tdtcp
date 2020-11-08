@@ -95,6 +95,8 @@ struct tcp_options_received {
 	u8	num_sacks;	/* Number of SACK blocks		*/
 	u16	user_mss;	/* mss requested by user in ioctl	*/
 	u16	mss_clamp;	/* Maximal mss, negotiated at connection setup */
+	bool	tdtcp_ok;	/* Whether peer claims TD_CAPABLE	*/
+	u8	num_tdns;	/* Number of time-division networks (TDN). */
 };
 
 static inline void tcp_clear_options(struct tcp_options_received *rx_opt)
@@ -104,6 +106,9 @@ static inline void tcp_clear_options(struct tcp_options_received *rx_opt)
 #if IS_ENABLED(CONFIG_SMC)
 	rx_opt->smc_ok = 0;
 #endif
+	/* Clears peer TDTCP option even if it is not supported locally. */
+	rx_opt->tdtcp_ok = false;
+	rx_opt->num_tdns = 0;
 }
 
 /* This is the max number of SACKS that we'll generate and process. It's safe
@@ -120,6 +125,8 @@ struct tcp_request_sock {
 	u64				snt_synack; /* first SYNACK sent time */
 	bool				tfo_listener;
 	bool				is_mptcp;
+	bool				is_tdtcp;
+	u8				num_tdns;
 #if IS_ENABLED(CONFIG_MPTCP)
 	bool				drop_req;
 #endif
@@ -390,6 +397,18 @@ struct tcp_sock {
 			   */
 #if IS_ENABLED(CONFIG_MPTCP)
 	bool	is_mptcp;
+#endif
+
+#if IS_ENABLED(CONFIG_TDTCP)
+	bool	is_tdtcp; /* Whether the socket is TDTCP enabled. */
+	u8	num_tdns; /* Number of TDNs both sides agree on. */
+	/* Whether the TDTCP connection is fully established. sk_state ==
+	 * TCP_ESTABLISHED cannot be used instead because sk_state is set to
+	 * established before the handshake ACK is constructed and sent. This
+	 * boolean flag should only be set to true after ACK is constructed
+	 * by client.
+	 */
+	bool	tdtcp_fully_established;
 #endif
 
 #ifdef CONFIG_TCP_MD5SIG

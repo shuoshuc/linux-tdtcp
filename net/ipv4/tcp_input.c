@@ -73,6 +73,7 @@
 #include <net/dst.h>
 #include <net/tcp.h>
 #include <net/inet_common.h>
+#include <net/tdtcp.h>
 #include <linux/ipsec.h>
 #include <asm/unaligned.h>
 #include <linux/errqueue.h>
@@ -80,6 +81,8 @@
 #include <linux/jump_label_ratelimit.h>
 #include <net/busy_poll.h>
 #include <net/mptcp.h>
+
+#include "../tdtcp/options.h"
 
 int sysctl_tcp_max_orphans __read_mostly = NR_FILE;
 
@@ -3940,6 +3943,15 @@ void tcp_parse_options(const struct net *net,
 							  opsize);
 				break;
 
+			case TCPOPT_TDTCP:
+				/* Incoming TDTCP option is always parsed even
+				 * if CONFIG_TDTCP=n. It can be discarded later.
+				 */
+				pr_debug("tcp_parse_options(), kind=TDTCP.");
+
+				tdtcp_parse_options(th, ptr, opsize, estab,
+						    opt_rx);
+				break;
 			}
 			ptr += opsize-2;
 			length -= opsize;
@@ -5984,6 +5996,15 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		 *    state to ESTABLISHED..."
 		 */
 
+		/* Negotiates TDTCP capability. Local num_tdns is not reset if
+		 * TDTCP ends up disabled.
+		 */
+		tp->is_tdtcp = tp->is_tdtcp && tp->rx_opt.tdtcp_ok
+			&& (tp->num_tdns == tp->rx_opt.num_tdns);
+		pr_debug("Incoming SYN/ACK handling, TDTCP negotiation completed, "
+			 "is_tdtcp=%u num_tdns=%u.", tp->is_tdtcp,
+			 tp->num_tdns);
+
 		tcp_ecn_rcv_synack(tp, th);
 
 		tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
@@ -6059,6 +6080,10 @@ discard:
 			return 0;
 		} else {
 			tcp_send_ack(sk);
+		}
+		/* Mark socket fully established if it is also TDTCP ready. */
+		if (sk_is_tdtcp(sk)) {
+			tp->tdtcp_fully_established = true;
 		}
 		return -1;
 	}
@@ -6652,6 +6677,16 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	tcp_rsk(req)->is_mptcp = 0;
 #endif
 
+#if IS_ENABLED(CONFIG_TDTCP)
+	/* Init the connection as TDTCP until peer option header says otherwise. */
+	tcp_rsk(req)->is_tdtcp = true;
+	tcp_rsk(req)->num_tdns = TDTCP_NUM_TDNS;
+#else
+	/* Default value when TDTCP is disabled in kernel config. */
+	tcp_rsk(req)->is_tdtcp = false;
+	tcp_rsk(req)->num_tdns = 0;
+#endif
+
 	tcp_clear_options(&tmp_opt);
 	tmp_opt.mss_clamp = af_ops->mss_clamp;
 	tmp_opt.user_mss  = tp->rx_opt.user_mss;
@@ -6675,6 +6710,19 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 
 	if (IS_ENABLED(CONFIG_MPTCP) && want_cookie)
 		tcp_rsk(req)->is_mptcp = 0;
+
+	/* TDTCP handshake negotiation happens below. A qualified TDTCP needs to
+	 * have (1) both sides claim TD_CAPABLE, (2) equal NUM_TDNS. If TDTCP
+	 * ends up disabled, local num_tdns is kept as is, we do not reset it.
+	 */
+	if (IS_ENABLED(CONFIG_TDTCP)) {
+		tcp_rsk(req)->is_tdtcp =
+			tcp_rsk(req)->is_tdtcp && tmp_opt.tdtcp_ok
+			&& (tmp_opt.num_tdns == tcp_rsk(req)->num_tdns);
+		pr_debug("tcp_conn_request() TDTCP negotiation completed, "
+			 "is_tdtcp=%u num_tdns=%u.", tcp_rsk(req)->is_tdtcp,
+			 tcp_rsk(req)->num_tdns);
+	}
 
 	if (security_inet_conn_request(sk, skb, req))
 		goto drop_and_free;

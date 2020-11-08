@@ -1,0 +1,9 @@
+
+config TDTCP
+	bool "TDTCP: Time-division TCP"
+	depends on INET
+	select SKB_EXTENSIONS
+	help
+	  Time-division TCP (TDTCP) connections can adapt to rapidly changing
+	  network conditions such as bandwidth and latency, while achieving a
+	  better performance than normal TCP.
