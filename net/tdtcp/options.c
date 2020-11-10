@@ -31,7 +31,7 @@ bool tdtcp_syn_options(unsigned int *size, struct tdtcp_out_options *opts)
 	pr_debug("tdtcp_syn_options() invoked for TDC_SYN.");
 	opts->suboptions = OPTION_TDTCP_TDC_SYN;
 	opts->num_tdns = TDTCP_NUM_TDNS;
-	*size = TCPOLEN_TDTCP_TDC_SYN;
+	*size = TCPOLEN_TDTCP_TDC;
 
 	return true;
 }
@@ -41,14 +41,13 @@ bool tdtcp_synack_options(unsigned int *size, struct tdtcp_out_options *opts)
 	pr_debug("tdtcp_synack_options() invoked for TDC_SYNACK.");
 	opts->suboptions = OPTION_TDTCP_TDC_SYNACK;
 	opts->num_tdns = TDTCP_NUM_TDNS;
-	*size = TCPOLEN_TDTCP_TDC_SYNACK;
+	*size = TCPOLEN_TDTCP_TDC;
 
 	return true;
 }
 
 bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
-			       unsigned int *size,
-			       unsigned int remaining,
+			       unsigned int *size, unsigned int remaining,
 			       struct tdtcp_out_options *opts)
 {
 	bool ret = false;
@@ -58,20 +57,9 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 	opts->suboptions = 0;
 	tp = tcp_sk(sk);
 
-	/* If sk_state is already set to established but tdtcp_fully_established
-	 * flag is still false, that means we are in the limbo state of 3-way
-	 * handshake, where the 3rd ACK needs to be sent.
+	/* TODO: processing for data/ack exchange. No need to process the 3rd
+	 * ACK since it does not contain TDTCP option header.
 	 */
-	if (sk_is_tdtcp(sk) && (sk->sk_state == TCP_ESTABLISHED) &&
-	    !tp->tdtcp_fully_established) {
-		opts->suboptions = OPTION_TDTCP_TDC_ACK;
-		opts->num_tdns = TDTCP_NUM_TDNS;
-		opt_size = TCPOLEN_TDTCP_TDC_SYNACK;
-
-		pr_debug("tdtcp_established_options() invoked for TDC_ACK.");
-
-		ret = true;
-	}
 
 	/* we reserved enough space for the above options, and exceeding the
 	 * TCP option space would be fatal
@@ -86,36 +74,16 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 
 void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts)
 {
-	if ((OPTION_TDTCP_TDC_SYN | OPTION_TDTCP_TDC_SYNACK |
-	     OPTION_TDTCP_TDC_ACK) & opts->suboptions) {
+	if ((OPTION_TDTCP_TDC_SYN | OPTION_TDTCP_TDC_SYNACK) &
+	    opts->suboptions) {
 		u8 len;
 
 		pr_debug("tdtcp_write_options(): construct TD_CAPABLE handshake "
-			 "header, TDC_SYN=%lu, TDC_SYNACK=%lu, TDC_ACK=%lu.",
+			 "header, TDC_SYN=%lu, TDC_SYNACK=%lu.",
 			 OPTION_TDTCP_TDC_SYN & opts->suboptions,
-			 OPTION_TDTCP_TDC_SYNACK & opts->suboptions,
-			 OPTION_TDTCP_TDC_ACK & opts->suboptions);
+			 OPTION_TDTCP_TDC_SYNACK & opts->suboptions);
 
-		/* Decides option header length depending on what stage it is in
-		 * the 3-way handshake process.
-		 */
-		if (OPTION_TDTCP_TDC_SYN & opts->suboptions) {
-			len = TCPOLEN_TDTCP_TDC_SYN;
-		}
-		else if (OPTION_TDTCP_TDC_SYNACK & opts->suboptions) {
-			len = TCPOLEN_TDTCP_TDC_SYNACK;
-		}
-		else if (OPTION_TDTCP_TDC_ACK & opts->suboptions) {
-			len = TCPOLEN_TDTCP_TDC_ACK;
-		}
-		else {
-			/* We do not expect more than one suboption type or
-			 * anything other than the above 3. If caught invalid,
-			 * length is forced to make the option header useless,
-			 * i.e., no space for any field.
-			 */
-			len = 2;
-		}
+		len = TCPOLEN_TDTCP_TDC;
 
 		/* Populates the first 4 bytes of the TDTCP option header. */
 		*ptr++ = tdtcp_option(TDTCPOPT_TD_CAPABLE, len, opts->num_tdns);
@@ -132,24 +100,14 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 {
 	bool is_syn = th->syn && !th->ack;
 	bool is_synack = th->syn && th->ack;
-	bool is_ack = !th->syn && th->ack;
 
 	/* Parses the handshake packets, i.e., TD_CAPABLE. */
-	if ((opsize == TCPOLEN_TDTCP_TDC_SYN ||
-	     opsize == TCPOLEN_TDTCP_TDC_SYNACK) && !estab &&
-	    (is_syn || is_synack)) {
+	if ((opsize == TCPOLEN_TDTCP_TDC) && !estab && (is_syn || is_synack)) {
 		opt_rx->tdtcp_ok = (*ptr++ >> 4) == TDTCPOPT_TD_CAPABLE;
 		if (opt_rx->tdtcp_ok) {
 			opt_rx->num_tdns = *(u8 *)ptr;
 		}
 		pr_debug("TDTCP subtype=TDC_(SYN|SYNACK), peer tdtcp_ok=%u, "
 			 "num_tdns=%u.", opt_rx->tdtcp_ok, opt_rx->num_tdns);
-	} else if (opsize == TCPOLEN_TDTCP_TDC_ACK && is_ack) {
-		/* No particular parsing needed for the 3rd ACK in handshake
-		 * process, as negotiation should have already been done in
-		 * the SYN and SYN/ACK.
-		 */
-		pr_debug("TDTCP subtype=TDC_ACK, peer tdtcp_ok=%u.",
-			 (*ptr >> 4) == TDTCPOPT_TD_CAPABLE);
 	}
 }

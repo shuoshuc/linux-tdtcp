@@ -9,18 +9,16 @@
 #define __TDTCP_OPTIONS_H
 
 /* TDTCP option bits, each suboption type takes one bit, up to 16. */
-#define OPTION_TDTCP_TDC_SYN	BIT(0)
-#define OPTION_TDTCP_TDC_SYNACK	BIT(1)
-#define OPTION_TDTCP_TDC_ACK	BIT(2)
-#define OPTION_TDTCP_TD_DA	BIT(3)
+#define OPTION_TDTCP_TDC_SYN		BIT(0)
+#define OPTION_TDTCP_TDC_SYNACK		BIT(1)
+#define OPTION_TDTCP_TD_DA		BIT(2)
 
 /* TDTCP option subtypes */
-#define TDTCPOPT_TD_CAPABLE	0
-#define TDTCPOPT_TD_DA		1
+#define TDTCPOPT_TD_UNKNOWN	0 /* default placeholder subtype goes first */
+#define TDTCPOPT_TD_CAPABLE	1
+#define TDTCPOPT_TD_DA		2
 
 /* TDTCP option header length for each suboption packet. */
-#define TCPOLEN_TDTCP_TDC_SYN		4
-#define TCPOLEN_TDTCP_TDC_SYNACK	4
-#define TCPOLEN_TDTCP_TDC_ACK		4
+#define TCPOLEN_TDTCP_TDC		4
 
 #endif /* __TDTCP_OPTIONS_H */

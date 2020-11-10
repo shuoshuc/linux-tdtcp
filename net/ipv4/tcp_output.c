@@ -3594,19 +3594,10 @@ static void tcp_connect_init(struct sock *sk)
 	tp->is_tdtcp = false;
 	tp->num_tdns = 0;
 #endif
-	/* TDTCP is default enabled locally. If the other side does not use
-	 * TDTCP, then fall back to disabled. tp->rx_opt will be updated when
-	 * we hear back from the other side.
-	 */
+	/* Assumes peer is not TDTCP capable until hearing from the peer. */
 	tp->rx_opt.tdtcp_ok = false;
 	tp->rx_opt.num_tdns = 0;
-	/* TDTCP connection is marked fully established after client has
-	 * constructed ACK.
-	 */
-	tp->tdtcp_fully_established = false;
-	pr_debug("tcp_connect_init() is_tdtcp=%u num_tdns=%u rx_opt.tdtcp_ok=%u "
-		 "rx_opt.num_tdns=%u.", tp->is_tdtcp, tp->num_tdns,
-		 tp->rx_opt.tdtcp_ok, tp->rx_opt.num_tdns);
+	tp->peer_num_tdns = 0;
 
 	inet_csk(sk)->icsk_rto = tcp_timeout_init(sk);
 	inet_csk(sk)->icsk_retransmits = 0;

@@ -125,8 +125,13 @@ struct tcp_request_sock {
 	u64				snt_synack; /* first SYNACK sent time */
 	bool				tfo_listener;
 	bool				is_mptcp;
+	/* The following 3 TDTCP attributes should not be flag protected because
+	 * the peer can have TDTCP enabled even if we do not. And we need all 4
+	 * of them to negotiate TDTCP capability.
+	 */
 	bool				is_tdtcp;
-	u8				num_tdns;
+	u8				num_tdns; /* # TDNs perceived locally */
+	u8				peer_num_tdns; /* peer claimed # TDNs */
 #if IS_ENABLED(CONFIG_MPTCP)
 	bool				drop_req;
 #endif
@@ -401,14 +406,8 @@ struct tcp_sock {
 
 #if IS_ENABLED(CONFIG_TDTCP)
 	bool	is_tdtcp; /* Whether the socket is TDTCP enabled. */
-	u8	num_tdns; /* Number of TDNs both sides agree on. */
-	/* Whether the TDTCP connection is fully established. sk_state ==
-	 * TCP_ESTABLISHED cannot be used instead because sk_state is set to
-	 * established before the handshake ACK is constructed and sent. This
-	 * boolean flag should only be set to true after ACK is constructed
-	 * by client.
-	 */
-	bool	tdtcp_fully_established;
+	u8	num_tdns; /* Number of TDNs both sides agree on.  */
+	u8	peer_num_tdns; /* peer claimed # TDNs             */
 #endif
 
 #ifdef CONFIG_TCP_MD5SIG

@@ -549,14 +549,9 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 	RCU_INIT_POINTER(newtp->fastopen_rsk, NULL);
 
 #ifdef CONFIG_TDTCP
-	newtp->is_tdtcp = oldtp->is_tdtcp;
-	newtp->num_tdns = oldtp->num_tdns;
-	/* If connection supports TDTCP, it should have been fully established
-	 * by now. So just use old socket's is_tdtcp should be fine.
-	 */
-	newtp->tdtcp_fully_established = oldtp->is_tdtcp;
-	newtp->rx_opt.tdtcp_ok = oldtp->rx_opt.tdtcp_ok;
-	newtp->rx_opt.num_tdns = oldtp->rx_opt.num_tdns;
+	newtp->is_tdtcp = treq->is_tdtcp;
+	newtp->num_tdns = treq->num_tdns;
+	newtp->peer_num_tdns = treq->peer_num_tdns;
 #endif
 
 	tcp_bpf_clone(sk, newsk);

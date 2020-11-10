@@ -5997,13 +5997,16 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		 */
 
 		/* Negotiates TDTCP capability. Local num_tdns is not reset if
-		 * TDTCP ends up disabled.
+		 * TDTCP ends up disabled. Though rx_opt.tdtcp_ok and
+		 * rx_opt.num_tdns are not supposed to be overwritten by new
+		 * packets, we still persist rx_opt.num_tdns in peer_num_tdns
+		 * after negotiation just to be organized.
 		 */
-		tp->is_tdtcp = tp->is_tdtcp && tp->rx_opt.tdtcp_ok
-			&& (tp->num_tdns == tp->rx_opt.num_tdns);
+		tp->is_tdtcp = tp->is_tdtcp && tp->rx_opt.tdtcp_ok;
+		tp->peer_num_tdns = tp->rx_opt.num_tdns;
 		pr_debug("Incoming SYN/ACK handling, TDTCP negotiation completed, "
-			 "is_tdtcp=%u num_tdns=%u.", tp->is_tdtcp,
-			 tp->num_tdns);
+			 "is_tdtcp=%u num_tdns=%u peer_num_tdns=%u.",
+			 tp->is_tdtcp, tp->num_tdns, tp->peer_num_tdns);
 
 		tcp_ecn_rcv_synack(tp, th);
 
@@ -6080,10 +6083,6 @@ discard:
 			return 0;
 		} else {
 			tcp_send_ack(sk);
-		}
-		/* Mark socket fully established if it is also TDTCP ready. */
-		if (sk_is_tdtcp(sk)) {
-			tp->tdtcp_fully_established = true;
 		}
 		return -1;
 	}
@@ -6686,6 +6685,8 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	tcp_rsk(req)->is_tdtcp = false;
 	tcp_rsk(req)->num_tdns = 0;
 #endif
+	/* Assume peer is not TDTCP capable until actually hearing from it. */
+	tcp_rsk(req)->peer_num_tdns = 0;
 
 	tcp_clear_options(&tmp_opt);
 	tmp_opt.mss_clamp = af_ops->mss_clamp;
@@ -6712,16 +6713,18 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		tcp_rsk(req)->is_mptcp = 0;
 
 	/* TDTCP handshake negotiation happens below. A qualified TDTCP needs to
-	 * have (1) both sides claim TD_CAPABLE, (2) equal NUM_TDNS. If TDTCP
-	 * ends up disabled, local num_tdns is kept as is, we do not reset it.
+	 * have (1) both sides claim TD_CAPABLE, (2) possibly asymmetric
+	 * NUM_TDNS or preferrably symmetric NUM_TDNS. If TDTCP ends up
+	 * disabled, local num_tdns is kept as is, we do not reset it.
 	 */
 	if (IS_ENABLED(CONFIG_TDTCP)) {
 		tcp_rsk(req)->is_tdtcp =
-			tcp_rsk(req)->is_tdtcp && tmp_opt.tdtcp_ok
-			&& (tmp_opt.num_tdns == tcp_rsk(req)->num_tdns);
+			tcp_rsk(req)->is_tdtcp && tmp_opt.tdtcp_ok;
+		tcp_rsk(req)->peer_num_tdns = tmp_opt.num_tdns;
 		pr_debug("tcp_conn_request() TDTCP negotiation completed, "
-			 "is_tdtcp=%u num_tdns=%u.", tcp_rsk(req)->is_tdtcp,
-			 tcp_rsk(req)->num_tdns);
+			 "is_tdtcp=%u num_tdns=%u peer_num_tdns=%u.",
+			 tcp_rsk(req)->is_tdtcp, tcp_rsk(req)->num_tdns,
+			 tcp_rsk(req)->peer_num_tdns);
 	}
 
 	if (security_inet_conn_request(sk, skb, req))
