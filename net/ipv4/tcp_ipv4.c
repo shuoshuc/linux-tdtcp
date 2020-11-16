@@ -69,6 +69,7 @@
 #include <net/xfrm.h>
 #include <net/secure_seq.h>
 #include <net/busy_poll.h>
+#include <net/tdtcp.h>
 
 #include <linux/inet.h>
 #include <linux/ipv6.h>
@@ -296,6 +297,20 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 						  inet->inet_daddr,
 						  inet->inet_sport,
 						  usin->sin_port));
+		/* Initialize subflow ISN to global ISN. We initialize the whole
+		 * array even though some entries/subflows are outside of the
+		 * num_tdns this socket sees, just in case we need to support
+		 * dynamic TDN addition/deletion in the future.
+		 */
+		if (sk_is_tdtcp(sk)) {
+			int i;
+			for (i = 0;
+			     i < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
+			     i++) {
+				WRITE_ONCE(tp->td_subf[i].sub_write_seq,
+					   tp->write_seq);
+			}
+		}
 		tp->tsoffset = secure_tcp_ts_off(sock_net(sk),
 						 inet->inet_saddr,
 						 inet->inet_daddr);

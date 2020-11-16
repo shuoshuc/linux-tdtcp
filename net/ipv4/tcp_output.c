@@ -48,8 +48,6 @@
 
 #include <trace/events/tcp.h>
 
-#include "../tdtcp/options.h"
-
 /* Refresh clocks of a TCP socket,
  * ensuring monotically increasing values.
  */
@@ -72,6 +70,15 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 	unsigned int prior_packets = tp->packets_out;
 
 	WRITE_ONCE(tp->snd_nxt, TCP_SKB_CB(skb)->end_seq);
+
+	/* Use the original data_tdn_id set in SKB CB for updating, in case
+	 * tp->curr_tdn_id has changed.
+	 */
+	if (sk_is_tdtcp(sk)) {
+		u8 tdn_id = TCP_SKB_CB(skb)->data_tdn_id;
+		WRITE_ONCE(tp->td_subf[tdn_id].sub_snd_nxt,
+			   TCP_SKB_CB(skb)->end_subseq);
+	}
 
 	__skb_unlink(skb, &sk->sk_write_queue);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, skb);

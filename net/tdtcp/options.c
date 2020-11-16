@@ -8,7 +8,6 @@
 #include <linux/kernel.h>
 #include <net/tdtcp.h>
 #include <net/tcp.h>
-#include "options.h"
 
 /* A helper function to pack bits into the option header.
  * Returns a 32-bit packed data entry in network endianess that is ready to go
@@ -51,33 +50,62 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 			       struct tdtcp_out_options *opts)
 {
 	bool ret = false;
-	unsigned int opt_size = 0;
 	struct tcp_sock *tp;
-
-	opts->suboptions = 0;
+	u8 flags = TCP_SKB_CB(skb)->tdtcp_flags;
 	tp = tcp_sk(sk);
 
-	/* TODO: processing for data/ack exchange. No need to process the 3rd
-	 * ACK since it does not contain TDTCP option header.
+	/* Initialize opt fields. tdn_id=0 is valid so default to 0xFF. */
+	opts->suboptions = 0;
+	opts->data_tdn_id = opts->ack_tdn_id = 0xFF;
+	opts->subseq = opts->suback = 0;
+	opts->td_da_flags = 0;
+
+	/* Prepare data/ack exchange packet headers. No need to process the 3rd
+	 * ACK in 3-way handshake since it does not contain TDTCP option header.
+	 * Only normal data/ack SKBs will have tdtcp_flags set and there should
+	 * be exactly one flag set. (Checked via is_power_of_2 algorithm.)
 	 */
+	if (flags && !(flags & (flags - 1))) {
+		/* If flags in CB is non-zero, it is a TD_DA packet. */
+		opts->suboptions = OPTION_TDTCP_TD_DA;
+		*size = TCPOLEN_TDTCP_TDDA;
+		opts->td_da_flags = flags;
+
+		if (flags & (TD_DA_FLG_B | TD_DA_FLG_D)) {
+			opts->data_tdn_id = TCP_SKB_CB(skb)->data_tdn_id;
+			opts->subseq = TCP_SKB_CB(skb)->subseq;
+		}
+		if (flags & (TD_DA_FLG_B | TD_DA_FLG_A)) {
+			opts->ack_tdn_id = TCP_SKB_CB(skb)->ack_tdn_id;
+			opts->suback = TCP_SKB_CB(skb)->suback;
+		}
+		ret = true;
+	} else {
+		/* If no flag is set at all, it could possibly be a handshake
+		 * ACK packet, which is not illegal.
+		 */
+		pr_debug("tdtcp_established_options() illegal TD_DA flags: "
+			 "B=%u D=%u A=%u.", flags & TD_DA_FLG_B,
+			 flags & TD_DA_FLG_D, flags & TD_DA_FLG_A);
+		ret = false;
+	}
 
 	/* we reserved enough space for the above options, and exceeding the
 	 * TCP option space would be fatal
 	 */
-	if (WARN_ON_ONCE(opt_size > remaining))
+	if (WARN_ON_ONCE(*size > remaining))
 		return false;
 
-	*size += opt_size;
-	remaining -= opt_size;
+	remaining -= *size;
 	return ret;
 }
 
 void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts)
 {
+	u8 len;
+
 	if ((OPTION_TDTCP_TDC_SYN | OPTION_TDTCP_TDC_SYNACK) &
 	    opts->suboptions) {
-		u8 len;
-
 		pr_debug("tdtcp_write_options(): construct TD_CAPABLE handshake "
 			 "header, TDC_SYN=%lu, TDC_SYNACK=%lu.",
 			 OPTION_TDTCP_TDC_SYN & opts->suboptions,
@@ -90,7 +118,23 @@ void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts)
 	}
 
 	if (OPTION_TDTCP_TD_DA & opts->suboptions) {
-		/* TODO: data/ack option header TBD. */
+		pr_debug("tdtcp_write_options(): construct TD_DA header, "
+			 "Flags B=%u D=%u A=%u, data_tdn_id=%u, ack_tdn_id=%u, "
+			 "subseq=%u, suback=%u.",
+			 TD_DA_FLG_B & opts->td_da_flags,
+			 TD_DA_FLG_D & opts->td_da_flags,
+			 TD_DA_FLG_A & opts->td_da_flags,
+			 opts->data_tdn_id, opts->ack_tdn_id,
+			 opts->subseq, opts->suback);
+
+		len = TCPOLEN_TDTCP_TDDA;
+
+		/* Populates the first 4 bytes of the TDTCP option header. */
+		*ptr++ = tdtcp_option(TDTCPOPT_TD_DA, len, opts->td_da_flags);
+		*ptr++ = htonl((opts->data_tdn_id << 24) | (0x0 << 16) |
+			       (opts->ack_tdn_id << 8) | 0x0);
+		*ptr++ = htonl(opts->subseq);
+		*ptr++ = htonl(opts->suback);
 	}
 }
 

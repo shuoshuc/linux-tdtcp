@@ -17,10 +17,34 @@
  */
 #define TDTCP_NUM_TDNS 2
 
+/* TDTCP option bits, each suboption type takes one bit, up to 16. */
+#define OPTION_TDTCP_TDC_SYN		BIT(0)
+#define OPTION_TDTCP_TDC_SYNACK		BIT(1)
+#define OPTION_TDTCP_TD_DA		BIT(2)
+
+/* TDTCP option subtypes */
+#define TDTCPOPT_TD_UNKNOWN	0 /* default placeholder subtype goes first */
+#define TDTCPOPT_TD_CAPABLE	1
+#define TDTCPOPT_TD_DA		2
+
+/* TDTCP option header length for each suboption packet. */
+#define TCPOLEN_TDTCP_TDC		4
+#define TCPOLEN_TDTCP_TDDA		16
+
+/* Flags used in TDTCP subtype TD_DA, up to 8. */
+#define TD_DA_FLG_A 0x01 /* packet contains TDTCP sub ack only */
+#define TD_DA_FLG_D 0x02 /* packet contains TDTCP sub data seq only */
+#define TD_DA_FLG_B 0x04 /* packet contains both TDTCP sub data seq and ack */
+
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
 	u16 suboptions;		/* a bit mask for TDTCP suboption type. */
 	u8 num_tdns;		/* number of TDNs perceived locally. */
+	u8 td_da_flags;		/* flags to be set in TD_DA subtype. */
+	u8 data_tdn_id;		/* TDN ID to which the carried data belongs. */
+	u8 ack_tdn_id;		/* TDN ID to which the suback is crediting. */
+	u32 subseq;		/* Subsequence number for data. */
+	u32 suback;		/* Subsequence number for ack. */
 #endif
 };
 

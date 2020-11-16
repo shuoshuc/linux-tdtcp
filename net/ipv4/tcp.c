@@ -275,6 +275,7 @@
 #include <net/xfrm.h>
 #include <net/ip.h>
 #include <net/sock.h>
+#include <net/tdtcp.h>
 
 #include <linux/uaccess.h>
 #include <asm/ioctls.h>
@@ -664,6 +665,17 @@ static void skb_entail(struct sock *sk, struct sk_buff *skb)
 	tcb->seq     = tcb->end_seq = tp->write_seq;
 	tcb->tcp_flags = TCPHDR_ACK;
 	tcb->sacked  = 0;
+	/* Only initialize the data portion of the SKB. TD_DA_FLG_B mode is not
+	 * supported right now so ACK portion should be set in a different
+	 * (receiving) code path.
+	 */
+	if (sk_is_tdtcp(sk)) {
+		u8 tdn_id = tp->curr_tdn_id;
+		tcb->data_tdn_id = tdn_id;
+		tcb->subseq = tp->td_subf[tdn_id].sub_write_seq;
+		tcb->end_subseq = tcb->subseq;
+		tcb->tdtcp_flags = TD_DA_FLG_D;
+	}
 	__skb_header_release(skb);
 	tcp_add_write_queue_tail(sk, skb);
 	sk_wmem_queued_add(sk, skb->truesize);
@@ -1374,6 +1386,14 @@ new_segment:
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
 		tcp_skb_pcount_set(skb, 0);
+
+		/* Update corresponding subflow if socket is TDTCP enabled. */
+		if (sk_is_tdtcp(sk)) {
+			u8 tdn_id = tp->curr_tdn_id;
+			WRITE_ONCE(tp->td_subf[tdn_id].sub_write_seq,
+				   tp->td_subf[tdn_id].sub_write_seq + copy);
+			TCP_SKB_CB(skb)->end_subseq += copy;
+		}
 
 		copied += copy;
 		if (!msg_data_left(msg)) {

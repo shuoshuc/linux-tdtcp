@@ -408,6 +408,26 @@ struct tcp_sock {
 	bool	is_tdtcp; /* Whether the socket is TDTCP enabled. */
 	u8	num_tdns; /* Number of TDNs both sides agree on.  */
 	u8	peer_num_tdns; /* peer claimed # TDNs             */
+	u8	curr_tdn_id; /* current TDN id the socket is seeing. */
+
+	/* Array of TDTCP subflows, each contains the subflow sequence number
+	 * and congestion control information. Indexed by the current TDN ID.
+	 * Array size dictates how many subflow states need to be maintained
+	 * inside a tcp_sock. Ideally we would want all subflow states to fit
+	 * in one page. That is up to 256 subflows in a 4096-byte page. Use 16
+	 * for now as this will be sufficient for electrical/optical hybrid
+	 * networks. But we might need to use a larger value for Opera[1].
+	 *
+	 * [1] Mellette, William M., et al. "Expanding across time to deliver
+	 *     bandwidth efficiency and low latency." 17th {USENIX} Symposium on
+	 *     Networked Systems Design and Implementation ({NSDI} 20). 2020.
+	 */
+	struct tdtcp_subflow {
+		u32	sub_rcv_nxt;
+		u32	sub_snd_nxt;
+		u32	sub_snd_una;
+		u32	sub_write_seq;
+	} td_subf[16];
 #endif
 
 #ifdef CONFIG_TCP_MD5SIG

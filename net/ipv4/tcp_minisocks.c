@@ -29,6 +29,7 @@
 #include <net/inet_common.h>
 #include <net/xfrm.h>
 #include <net/busy_poll.h>
+#include <net/tdtcp.h>
 
 static bool tcp_in_window(u32 seq, u32 end_seq, u32 s_win, u32 e_win)
 {
@@ -501,6 +502,21 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 
 	tcp_init_xmit_timers(newsk);
 	WRITE_ONCE(newtp->write_seq, newtp->pushed_seq = treq->snt_isn + 1);
+
+	/* Initialize all subflows in the new socket, even though we might not
+	 * use all of them (num_tdn < 16).
+	 */
+	if(sk_is_tdtcp(newsk)) {
+		int i;
+		for (i = 0;
+		     i < sizeof(newtp->td_subf) / sizeof(newtp->td_subf[0]);
+		     i++) {
+			WRITE_ONCE(newtp->td_subf[i].sub_snd_nxt, seq);
+			WRITE_ONCE(newtp->td_subf[i].sub_write_seq,
+				   newtp->write_seq);
+			/* TODO: more init for receive tracking variables */
+		}
+	}
 
 	if (sock_flag(newsk, SOCK_KEEPOPEN))
 		inet_csk_reset_keepalive_timer(newsk,
