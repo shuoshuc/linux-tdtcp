@@ -51,8 +51,22 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 {
 	bool ret = false;
 	struct tcp_sock *tp;
-	u8 flags = TCP_SKB_CB(skb)->tdtcp_flags;
+	u8 flags = 0;
 	tp = tcp_sk(sk);
+
+	/* If skb is null, that indicates caller is just trying to estimate the
+	 * option header length but not really constructing the packet. Very
+	 * likely that tcp_current_mss() is calling this function. In which
+	 * case, we need to give a worst case estimate so that estimate MSS is
+	 * large enough. Regardless, TDDA is the only subtype (with a fixed
+	 * header size) used in ESTABLISHED state.
+	 */
+	if (!skb) {
+		opts->suboptions = OPTION_TDTCP_TD_DA;
+		*size = TCPOLEN_TDTCP_TDDA;
+		return true;
+	}
+	flags = TCP_SKB_CB(skb)->tdtcp_flags;
 
 	/* Initialize opt fields. tdn_id=0 is valid so default to 0xFF. */
 	opts->suboptions = 0;
