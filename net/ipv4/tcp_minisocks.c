@@ -511,10 +511,14 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 		for (i = 0;
 		     i < sizeof(newtp->td_subf) / sizeof(newtp->td_subf[0]);
 		     i++) {
-			WRITE_ONCE(newtp->td_subf[i].sub_snd_nxt, seq);
+			WRITE_ONCE(newtp->td_subf[i].sub_snd_nxt,
+				   newtp->snd_nxt);
 			WRITE_ONCE(newtp->td_subf[i].sub_write_seq,
 				   newtp->write_seq);
-			/* TODO: more init for receive tracking variables */
+			WRITE_ONCE(newtp->td_subf[i].sub_snd_una,
+				   newtp->snd_una);
+			WRITE_ONCE(newtp->td_subf[i].sub_rcv_nxt,
+				   newtp->rcv_nxt);
 		}
 	}
 
