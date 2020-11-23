@@ -3337,6 +3337,18 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 			tcp_enable_tx_delay();
 		tp->tcp_tx_delay = val;
 		break;
+#ifdef CONFIG_TDTCP
+	case TCP_CURR_TDN_ID:
+		if (val < 0 || val >= tp->num_tdns) {
+			pr_debug("do_tcp_setsockopt(): invalid curr_tdn_id! "
+				 "new curr_tdn_id=%u, num_tdns=%u.",
+				 val, tp->num_tdns);
+			err = -EINVAL;
+		} else {
+			tp->curr_tdn_id = val;
+		}
+		break;
+#endif
 	default:
 		err = -ENOPROTOOPT;
 		break;
