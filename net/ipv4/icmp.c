@@ -81,6 +81,7 @@
 #include <net/udp.h>
 #include <net/raw.h>
 #include <net/ping.h>
+#include <net/tdtcp.h>
 #include <linux/skbuff.h>
 #include <net/sock.h>
 #include <linux/errno.h>
@@ -1027,6 +1028,71 @@ static bool icmp_discard(struct sk_buff *skb)
 	return true;
 }
 
+static bool icmp_active_tdn_id(struct sk_buff *skb)
+{
+	struct icmphdr *icmph;
+	struct net *net;
+	struct tcp_sock *tp;
+	struct sock *sk;
+	const struct hlist_nulls_node *node;
+	unsigned int i;
+	u8 tdn_id = 0xFF; /* 0 is a valid TDN ID, so use 0xFF for init. */
+
+	net = dev_net(skb_dst(skb)->dev);
+	icmph = icmp_hdr(skb);
+
+	/* ICMP type mismatching, drop. */
+	if (icmph->type != ICMP_ACTIVE_TDN_ID)
+		goto out_err;
+	/* ICMP code is not 0, illformed, drop. */
+	if (icmph->code != 0)
+		goto out_err;
+
+	/* No network order to host order conversion for a single byte. */
+	tdn_id = icmph->un.active_tdn.id;
+
+	pr_debug("icmp_active_tdn_id(): set curr_tdn_id=%u on all TDTCP "
+		 "sockets.", tdn_id);
+
+	/* Go through all TDTCP enabled sockets in tcp_hashinfo.ehash, i.e., in
+	 * ESTABLISHED state, and change their curr_tdn_id. ehash could be a
+	 * very large hashtable when there are many TCP connections, but we go
+	 * through it on every ICMP TDN ID change anyways. Because in a RDCN
+	 * deployment, almost all TCP sockets are TDTCP enabled. That means,
+	 * keeping a slightly shorter list is not saving us much.
+	 */
+	for (i = 0; i <= tcp_hashinfo.ehash_mask; i++) {
+		sk_nulls_for_each_rcu(sk, node, &tcp_hashinfo.ehash[i].chain) {
+			if (sk->sk_state != TCP_ESTABLISHED)
+				continue;
+			if (!sk_is_tdtcp(sk))
+				continue;
+
+			tp = tcp_sk(sk);
+			/* Minimum locking only if socket is valid to update. */
+			lock_sock(sk);
+			if (tdn_id < 0 || tdn_id >= tp->num_tdns) {
+				/* We do not special handle invalid scenarios,
+				 * or try to fix it. So just simply skip.
+				 */
+				pr_debug("icmp_active_tdn_id(): illegal tdn_id!"
+					 " new curr_tdn_id=%u, num_tdns=%u on "
+					 "sk=%p.", tdn_id, tp->num_tdns, sk);
+			} else {
+				WRITE_ONCE(tp->curr_tdn_id, tdn_id);
+				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
+					 "on sk=%p.", tp->curr_tdn_id, sk);
+			}
+			release_sock(sk);
+		}
+	}
+	return true;
+
+out_err:
+	__ICMP_INC_STATS(net, ICMP_MIB_INERRORS);
+	return false;
+}
+
 /*
  *	Deal with incoming ICMP packets.
  */
@@ -1187,9 +1253,8 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES + 1] = {
 		.handler = icmp_discard,
 		.error = 1,
 	},
-	[10] = {
-		.handler = icmp_discard,
-		.error = 1,
+	[ICMP_ACTIVE_TDN_ID] = {
+		.handler = icmp_active_tdn_id,
 	},
 	[ICMP_TIME_EXCEEDED] = {
 		.handler = icmp_unreach,

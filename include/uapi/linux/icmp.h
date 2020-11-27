@@ -25,6 +25,7 @@
 #define ICMP_SOURCE_QUENCH	4	/* Source Quench		*/
 #define ICMP_REDIRECT		5	/* Redirect (change route)	*/
 #define ICMP_ECHO		8	/* Echo Request			*/
+#define ICMP_ACTIVE_TDN_ID	10	/* Active TDN ID change		*/
 #define ICMP_TIME_EXCEEDED	11	/* Time Exceeded		*/
 #define ICMP_PARAMETERPROB	12	/* Parameter Problem		*/
 #define ICMP_TIMESTAMP		13	/* Timestamp Request		*/
@@ -80,6 +81,15 @@ struct icmphdr {
 		__be16	__unused;
 		__be16	mtu;
 	} frag;
+#ifdef CONFIG_TDTCP
+	/* The first byte of a 4-byte word is TDN ID. Include a 3-byte array as
+	 * placeholder for the rest 3 bytes in the same word.
+	 */
+	struct {
+		__u8	id;
+		__u8	__unused[3];
+	} active_tdn;
+#endif
 	__u8	reserved[4];
   } un;
 };
