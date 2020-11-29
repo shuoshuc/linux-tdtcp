@@ -1242,9 +1242,8 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES + 1] = {
 		.handler = icmp_discard,
 		.error = 1,
 	},
-	[7] = {
-		.handler = icmp_discard,
-		.error = 1,
+	[ICMP_ACTIVE_TDN_ID] = {
+		.handler = icmp_active_tdn_id,
 	},
 	[ICMP_ECHO] = {
 		.handler = icmp_echo,
@@ -1253,8 +1252,9 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES + 1] = {
 		.handler = icmp_discard,
 		.error = 1,
 	},
-	[ICMP_ACTIVE_TDN_ID] = {
-		.handler = icmp_active_tdn_id,
+	[10] = {
+		.handler = icmp_discard,
+		.error = 1,
 	},
 	[ICMP_TIME_EXCEEDED] = {
 		.handler = icmp_unreach,
