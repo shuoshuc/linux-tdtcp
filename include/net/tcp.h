@@ -888,9 +888,6 @@ struct tcp_skb_cb {
 	__u8		tdtcp_flags;	/* TD_DA subtype flags */
 	__u8		data_tdn_id;	/* TDN ID this SKB corresponds to */
 	__u8		ack_tdn_id;	/* TDN ID which the ack is for */
-	__u32		subseq;		/* Sub-sequence for data */
-	__u32		end_subseq;	/* End byte of sub-sequence for data */
-	__u32		suback;		/* Sub-acknowledge for received data */
 #endif
 };
 

@@ -29,7 +29,7 @@
 
 /* TDTCP option header length for each suboption packet. */
 #define TCPOLEN_TDTCP_TDC		4
-#define TCPOLEN_TDTCP_TDDA		16
+#define TCPOLEN_TDTCP_TDDA		8
 
 /* Flags used in TDTCP subtype TD_DA, up to 8. */
 #define TD_DA_FLG_A 0x01 /* packet contains TDTCP sub ack only */
@@ -43,8 +43,6 @@ struct tdtcp_out_options {
 	u8 td_da_flags;		/* flags to be set in TD_DA subtype. */
 	u8 data_tdn_id;		/* TDN ID to which the carried data belongs. */
 	u8 ack_tdn_id;		/* TDN ID to which the suback is crediting. */
-	u32 subseq;		/* Subsequence number for data. */
-	u32 suback;		/* Subsequence number for ack. */
 #endif
 };
 

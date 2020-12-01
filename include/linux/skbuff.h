@@ -743,10 +743,10 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 *
-	 * Note: TDTCP introduces 15 bytes of control info into CB. We round up
-	 * to 16 bytes for 8-byte alignment.
+	 * Note: TDTCP introduces 3 bytes of control info into CB. We round up
+	 * to 8 bytes for 8-byte alignment. So 48 + 8 = 56.
 	 */
-	char			cb[64] __aligned(8);
+	char			cb[56] __aligned(8);
 
 	union {
 		struct {

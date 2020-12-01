@@ -71,7 +71,6 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 	/* Initialize opt fields. tdn_id=0 is valid so default to 0xFF. */
 	opts->suboptions = 0;
 	opts->data_tdn_id = opts->ack_tdn_id = 0xFF;
-	opts->subseq = opts->suback = 0;
 	opts->td_da_flags = 0;
 
 	/* Prepare data/ack exchange packet headers. No need to process the 3rd
@@ -87,11 +86,9 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 
 		if (flags & (TD_DA_FLG_B | TD_DA_FLG_D)) {
 			opts->data_tdn_id = TCP_SKB_CB(skb)->data_tdn_id;
-			opts->subseq = TCP_SKB_CB(skb)->subseq;
 		}
 		if (flags & (TD_DA_FLG_B | TD_DA_FLG_A)) {
 			opts->ack_tdn_id = TCP_SKB_CB(skb)->ack_tdn_id;
-			opts->suback = TCP_SKB_CB(skb)->suback;
 		}
 		ret = true;
 	} else {
@@ -116,8 +113,6 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 
 void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts)
 {
-	u8 len;
-
 	if ((OPTION_TDTCP_TDC_SYN | OPTION_TDTCP_TDC_SYNACK) &
 	    opts->suboptions) {
 		pr_debug("tdtcp_write_options(): construct TD_CAPABLE handshake "
@@ -125,30 +120,25 @@ void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts)
 			 OPTION_TDTCP_TDC_SYN & opts->suboptions,
 			 OPTION_TDTCP_TDC_SYNACK & opts->suboptions);
 
-		len = TCPOLEN_TDTCP_TDC;
-
 		/* Populates the first 4 bytes of the TDTCP option header. */
-		*ptr++ = tdtcp_option(TDTCPOPT_TD_CAPABLE, len, opts->num_tdns);
+		*ptr++ = tdtcp_option(TDTCPOPT_TD_CAPABLE, TCPOLEN_TDTCP_TDC,
+				      opts->num_tdns);
 	}
 
 	if (OPTION_TDTCP_TD_DA & opts->suboptions) {
 		pr_debug("tdtcp_write_options(): construct TD_DA header, "
-			 "Flags B=%u D=%u A=%u, data_tdn_id=%u, ack_tdn_id=%u, "
-			 "subseq=%u, suback=%u.",
+			 "Flags B=%u D=%u A=%u, data_tdn_id=%u, ack_tdn_id=%u.",
 			 TD_DA_FLG_B & opts->td_da_flags,
 			 TD_DA_FLG_D & opts->td_da_flags,
 			 TD_DA_FLG_A & opts->td_da_flags,
-			 opts->data_tdn_id, opts->ack_tdn_id,
-			 opts->subseq, opts->suback);
-
-		len = TCPOLEN_TDTCP_TDDA;
+			 opts->data_tdn_id, opts->ack_tdn_id);
 
 		/* Populates the first 4 bytes of the TDTCP option header. */
-		*ptr++ = tdtcp_option(TDTCPOPT_TD_DA, len, opts->td_da_flags);
+		*ptr++ = tdtcp_option(TDTCPOPT_TD_DA, TCPOLEN_TDTCP_TDDA,
+				      opts->td_da_flags);
+		/* Populates the 2nd 4 bytes of the TDTCP option header. */
 		*ptr++ = htonl((opts->data_tdn_id << 24) | (0x0 << 16) |
 			       (opts->ack_tdn_id << 8) | 0x0);
-		*ptr++ = htonl(opts->subseq);
-		*ptr++ = htonl(opts->suback);
 	}
 }
 

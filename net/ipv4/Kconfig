@@ -669,6 +669,13 @@ config TCP_CONG_BBR
 	  bufferbloat, policers, or AQM schemes that do not provide a delay
 	  signal. It requires the fq ("Fair Queue") pacing packet scheduler.
 
+config TCP_CONG_TDTCP_RENO
+	tristate "TDTCP Reno"
+	default y
+	help
+
+	  TDTCP Reno is TCP Reno CCA customized for TDTCP.
+
 choice
 	prompt "Default TCP congestion control"
 	default DEFAULT_CUBIC
@@ -705,6 +712,9 @@ choice
 
 	config DEFAULT_BBR
 		bool "BBR" if TCP_CONG_BBR=y
+
+	config DEFAULT_TDTCP_RENO
+		bool "TDTCP_Reno" if TCP_CONG_TDTCP_RENO=y
 
 	config DEFAULT_RENO
 		bool "Reno"

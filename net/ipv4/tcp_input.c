@@ -6052,25 +6052,18 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 
 		tcp_finish_connect(sk, skb);
 
-		/* Initialize subflow sequence to global sequence after the
-		 * ISNs for both sides are known by now. We initialize the whole
-		 * array even though some entries/subflows are outside of the
-		 * num_tdns this socket sees, just in case we need to support
-		 * dynamic TDN addition/deletion in the future.
+		/* Initialize subflow variables now that we have heard back from
+		 * the peer. We initialize the whole array even though some
+		 * entries/subflows are outside of the num_tdns this socket
+		 * sees, just in case we need to support dynamic TDN addition
+		 * and deletion in the future.
 		 */
 		if (sk_is_tdtcp(sk)) {
 			int i;
 			for (i = 0;
 			     i < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
 			     i++) {
-				WRITE_ONCE(tp->td_subf[i].sub_snd_nxt,
-					   tp->snd_nxt);
-				WRITE_ONCE(tp->td_subf[i].sub_write_seq,
-					   tp->write_seq);
-				WRITE_ONCE(tp->td_subf[i].sub_snd_una,
-					   tp->snd_una);
-				WRITE_ONCE(tp->td_subf[i].sub_rcv_nxt,
-					   tp->rcv_nxt);
+				/* TODO: initialize subflow variables. */
 			}
 		}
 
