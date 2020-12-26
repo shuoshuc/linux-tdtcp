@@ -1084,10 +1084,10 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				 * tdn_id's window from 2 cycles ago is still
 				 * not closed. This indicates that TDNs switch
 				 * too fast, which is a scenario we do not yet
-				 * want to support. If this happens, just ignore
-				 * the open window and carry on as if it is
-				 * closed. Be aware that TDTCP engine might not
-				 * function correctly after this.
+				 * want to support. If this happens, we log key
+				 * info and stack trace then kill the process.
+				 * Because there is a good chance that TDTCP
+				 * engine will not function correctly.
 				 */
 				if (TD_PREV_UNA(tp, tdn_id) !=
 				    TD_PREV_NXT(tp, tdn_id)) {
@@ -1097,6 +1097,8 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 						 tp->curr_tdn_id, sk,
 						 TD_PREV_UNA(tp, tdn_id),
 						 TD_PREV_NXT(tp, tdn_id));
+					BUG_ON(TD_PREV_UNA(tp, tdn_id) !=
+					       TD_PREV_NXT(tp, tdn_id));
 				}
 				/* Open up a new window for tdn_id, starting
 				 * from snd_nxt of curr_tdn_id. Roll snd_una and

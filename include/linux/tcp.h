@@ -430,6 +430,8 @@ struct tcp_sock {
 		u32	prev_snd_nxt;
 		/* Oldest byte unACKed for the cycle prior to the most recent one */
 		u32	prev_snd_una;
+		/* Sending congestion window */
+		u32	snd_cwnd;
 	} td_subf[16];
 #endif
 

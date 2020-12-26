@@ -1922,7 +1922,7 @@ static inline unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
 		return 1;
 
 	in_flight = tcp_packets_in_flight(tp);
-	cwnd = tp->snd_cwnd;
+	cwnd = td_cwnd_or_default(tp);
 	if (in_flight >= cwnd)
 		return 0;
 
@@ -2083,7 +2083,7 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 	send_win = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
 
 	/* From in_flight test above, we know that cwnd > in_flight.  */
-	cong_win = (tp->snd_cwnd - in_flight) * tp->mss_cache;
+	cong_win = (td_cwnd_or_default(tp) - in_flight) * tp->mss_cache;
 
 	limit = min(send_win, cong_win);
 
@@ -2596,7 +2596,8 @@ repair:
 		/* Send one loss probe per tail loss episode. */
 		if (push_one != 2)
 			tcp_schedule_loss_probe(sk, false);
-		is_cwnd_limited |= (tcp_packets_in_flight(tp) >= tp->snd_cwnd);
+		is_cwnd_limited |= (tcp_packets_in_flight(tp) >=
+				    td_cwnd_or_default(tp));
 		tcp_cwnd_validate(sk, is_cwnd_limited);
 		return false;
 	}
@@ -3190,7 +3191,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 		if (!hole)
 			tp->retransmit_skb_hint = skb;
 
-		segs = tp->snd_cwnd - tcp_packets_in_flight(tp);
+		segs = td_cwnd_or_default(tp) - tcp_packets_in_flight(tp);
 		if (segs <= 0)
 			break;
 		sacked = TCP_SKB_CB(skb)->sacked;

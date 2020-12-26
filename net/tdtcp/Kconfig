@@ -8,3 +8,10 @@ config TDTCP
 	  Time-division TCP (TDTCP) connections can adapt to rapidly changing
 	  network conditions such as bandwidth and latency, while achieving a
 	  better performance than normal TCP.
+
+config TDTCP_DEV
+	bool "TDTCP dev features"
+	depends on TDTCP
+	default y
+	help
+	  Decides whether the dev features of TDTCP are enabled.

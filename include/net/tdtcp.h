@@ -41,6 +41,7 @@
 #define TD_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_nxt
 #define TD_PREV_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_una
 #define TD_PREV_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_nxt
+#define TD_CWND(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
@@ -89,6 +90,15 @@ void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts);
 void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 			 int opsize, int estab,
 			 struct tcp_options_received *opt_rx);
+
+/* Return the cwnd of current TDN or the default snd_cwnd. */
+u32 td_cwnd_or_default(const struct tcp_sock *tp)
+{
+	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
+		return TD_CWND(tp, tp->curr_tdn_id);
+	}
+	return tp->snd_cwnd;
+}
 
 #else
 
