@@ -36,6 +36,12 @@
 #define TD_DA_FLG_D 0x02 /* packet contains TDTCP sub data seq only */
 #define TD_DA_FLG_B 0x04 /* packet contains both TDTCP sub data seq and ack */
 
+/* Macros to help shorten accessing td_subf members. */
+#define TD_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].snd_una
+#define TD_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_nxt
+#define TD_PREV_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_una
+#define TD_PREV_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_nxt
+
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
 	u16 suboptions;		/* a bit mask for TDTCP suboption type. */

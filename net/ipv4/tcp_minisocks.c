@@ -512,6 +512,10 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 		     i < sizeof(newtp->td_subf) / sizeof(newtp->td_subf[0]);
 		     i++) {
 			/* TODO: initialize subflow variables. */
+			WRITE_ONCE(TD_UNA(newtp, i), seq);
+			WRITE_ONCE(TD_NXT(newtp, i), seq);
+			WRITE_ONCE(TD_PREV_UNA(newtp, i), seq);
+			WRITE_ONCE(TD_PREV_NXT(newtp, i), seq);
 		}
 	}
 

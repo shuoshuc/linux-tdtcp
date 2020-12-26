@@ -1036,7 +1036,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	struct sock *sk;
 	const struct hlist_nulls_node *node;
 	unsigned int i;
-	u8 tdn_id = 0xFF; /* 0 is a valid TDN ID, so use 0xFF for init. */
+	u8 curr_tdn_id, tdn_id = 0xFF; /* 0 is a valid TDN ID, so use 0xFF for init. */
 
 	net = dev_net(skb_dst(skb)->dev);
 	icmph = icmp_hdr(skb);
@@ -1079,6 +1079,35 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					 " new curr_tdn_id=%u, num_tdns=%u on "
 					 "sk=%p.", tdn_id, tp->num_tdns, sk);
 			} else {
+				curr_tdn_id = READ_ONCE(tp->curr_tdn_id);
+				/* If prev_snd_una != prev_snd_nxt, that means
+				 * tdn_id's window from 2 cycles ago is still
+				 * not closed. This indicates that TDNs switch
+				 * too fast, which is a scenario we do not yet
+				 * want to support. If this happens, just ignore
+				 * the open window and carry on as if it is
+				 * closed. Be aware that TDTCP engine might not
+				 * function correctly after this.
+				 */
+				if (TD_PREV_UNA(tp, tdn_id) !=
+				    TD_PREV_NXT(tp, tdn_id)) {
+					pr_debug("ICMP TDN change: tdn_id=%u "
+						 "on sk=%p, prev_snd_una (%u) "
+						 "!= prev_snd_nxt (%u).",
+						 tp->curr_tdn_id, sk,
+						 TD_PREV_UNA(tp, tdn_id),
+						 TD_PREV_NXT(tp, tdn_id));
+				}
+				/* Open up a new window for tdn_id, starting
+				 * from snd_nxt of curr_tdn_id. Roll snd_una and
+				 * snd_nxt of tdn_id (the previous window) over
+				 * to prev_snd_una and prev_snd_nxt.
+				 */
+				TD_PREV_UNA(tp, tdn_id) = TD_UNA(tp, tdn_id);
+				TD_PREV_NXT(tp, tdn_id) = TD_NXT(tp, tdn_id);
+				TD_UNA(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
+				TD_NXT(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
+
 				WRITE_ONCE(tp->curr_tdn_id, tdn_id);
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
 					 "on sk=%p.", tp->curr_tdn_id, sk);

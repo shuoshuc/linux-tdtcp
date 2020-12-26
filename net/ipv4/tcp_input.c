@@ -6064,6 +6064,10 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 			     i < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
 			     i++) {
 				/* TODO: initialize subflow variables. */
+				WRITE_ONCE(TD_UNA(tp, i), tp->snd_una);
+				WRITE_ONCE(TD_NXT(tp, i), tp->snd_nxt);
+				WRITE_ONCE(TD_PREV_UNA(tp, i), tp->snd_una);
+				WRITE_ONCE(TD_PREV_NXT(tp, i), tp->snd_nxt);
 			}
 		}
 
