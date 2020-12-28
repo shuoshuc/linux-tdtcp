@@ -10,7 +10,7 @@ void tcp_mark_skb_lost(struct sock *sk, struct sk_buff *skb)
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
 		/* Account for retransmits that are lost again */
 		TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
-		tp->retrans_out -= tcp_skb_pcount(skb);
+		set_retrans_out(tp, td_retrans_out(tp) - tcp_skb_pcount(skb));
 		NET_ADD_STATS(sock_net(sk), LINUX_MIB_TCPLOSTRETRANSMIT,
 			      tcp_skb_pcount(skb));
 	}
@@ -32,7 +32,7 @@ static u32 tcp_rack_reo_wnd(const struct sock *sk)
 		if (inet_csk(sk)->icsk_ca_state >= TCP_CA_Recovery)
 			return 0;
 
-		if (tp->sacked_out >= tp->reordering &&
+		if (td_sacked_out(tp) >= tp->reordering &&
 		    !(sock_net(sk)->ipv4.sysctl_tcp_recovery & TCP_RACK_NO_DUPTHRESH))
 			return 0;
 	}
@@ -233,7 +233,7 @@ void tcp_newreno_mark_lost(struct sock *sk, bool snd_una_advanced)
 	const u8 state = inet_csk(sk)->icsk_ca_state;
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if ((state < TCP_CA_Recovery && tp->sacked_out >= tp->reordering) ||
+	if ((state < TCP_CA_Recovery && td_sacked_out(tp) >= tp->reordering) ||
 	    (state == TCP_CA_Recovery && snd_una_advanced)) {
 		struct sk_buff *skb = tcp_rtx_queue_head(sk);
 		u32 mss;

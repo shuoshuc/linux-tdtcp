@@ -191,7 +191,7 @@ void tcp_rate_check_app_limited(struct sock *sk)
 	    /* We are not limited by CWND. */
 	    tcp_packets_in_flight(tp) < td_cwnd(tp) &&
 	    /* All lost packets have been retransmitted. */
-	    tp->lost_out <= tp->retrans_out)
+	    td_lost_out(tp) <= td_retrans_out(tp))
 		tp->app_limited =
 			(tp->delivered + tcp_packets_in_flight(tp)) ? : 1;
 }

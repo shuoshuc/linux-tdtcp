@@ -444,6 +444,12 @@ struct tcp_sock {
 			unused:7;
 		/* Packets which are "in flight" */
 		u32	packets_out;
+		/* Retransmitted packets out (retransmitted but not acked) */
+		u32	retrans_out;
+		/* Lost packets that left network */
+		u32	lost_out;
+		/* SACK'd packets that left network */
+		u32	sacked_out;
 		/* max packets_out in last window */
 		u32	max_packets_out;
 		/* right edge of max_packets_out flight */

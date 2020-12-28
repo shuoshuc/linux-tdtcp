@@ -1185,7 +1185,7 @@ static inline bool tcp_is_reno(const struct tcp_sock *tp)
 
 static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
 {
-	return tp->sacked_out + tp->lost_out;
+	return td_sacked_out(tp) + td_lost_out(tp);
 }
 
 /* This determines how many packets are "in the network" to the best
@@ -1204,7 +1204,7 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
-	return td_pkts_out(tp) - tcp_left_out(tp) + tp->retrans_out;
+	return td_pkts_out(tp) - tcp_left_out(tp) + td_retrans_out(tp);
 }
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
@@ -1874,7 +1874,7 @@ static inline void tcp_push_pending_frames(struct sock *sk)
  */
 static inline u32 tcp_highest_sack_seq(struct tcp_sock *tp)
 {
-	if (!tp->sacked_out)
+	if (!td_sacked_out(tp))
 		return tp->snd_una;
 
 	if (tp->highest_sack == NULL)

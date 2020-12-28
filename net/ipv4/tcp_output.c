@@ -909,7 +909,7 @@ static void tcp_tsq_write(struct sock *sk)
 	     TCPF_CLOSE_WAIT  | TCPF_LAST_ACK)) {
 		struct tcp_sock *tp = tcp_sk(sk);
 
-		if (tp->lost_out > tp->retrans_out &&
+		if (td_lost_out(tp) > td_retrans_out(tp) &&
 		    td_cwnd(tp) > tcp_packets_in_flight(tp)) {
 			tcp_mstamp_refresh(tp);
 			tcp_xmit_retransmit_queue(sk);
@@ -1351,15 +1351,16 @@ static void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int de
 	set_pkts_out(tp, td_pkts_out(tp) - decr);
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
-		tp->sacked_out -= decr;
+		set_sacked_out(tp, td_sacked_out(tp) - decr);
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS)
-		tp->retrans_out -= decr;
+		set_retrans_out(tp, td_retrans_out(tp) - decr);
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_LOST)
-		tp->lost_out -= decr;
+		set_lost_out(tp, td_lost_out(tp) - decr);
 
 	/* Reno case is special. Sigh... */
 	if (tcp_is_reno(tp) && decr > 0)
-		tp->sacked_out -= min_t(u32, tp->sacked_out, decr);
+		set_sacked_out(tp, td_sacked_out(tp) -
+			       min_t(u32, td_sacked_out(tp), decr));
 
 	if (tp->lost_skb_hint &&
 	    before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(tp->lost_skb_hint)->seq) &&
@@ -3146,7 +3147,7 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 		}
 #endif
 		TCP_SKB_CB(skb)->sacked |= TCPCB_RETRANS;
-		tp->retrans_out += tcp_skb_pcount(skb);
+		set_retrans_out(tp, td_retrans_out(tp) + tcp_skb_pcount(skb));
 	}
 
 	/* Save stamp of the first (attempted) retransmit. */
@@ -3199,7 +3200,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 		 */
 		segs = min_t(int, segs, max_segs);
 
-		if (tp->retrans_out >= tp->lost_out) {
+		if (td_retrans_out(tp) >= td_lost_out(tp)) {
 			break;
 		} else if (!(sacked & TCPCB_LOST)) {
 			if (!hole && !(sacked & (TCPCB_SACKED_RETRANS|TCPCB_SACKED_ACKED)))

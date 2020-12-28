@@ -48,6 +48,9 @@
 #define TD_CWND_LIMITED(tp, tdn_id) (tp)->td_subf[tdn_id].is_cwnd_limited
 #define TD_CWND_CNT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd_cnt
 #define TD_PKTS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].packets_out
+#define TD_RETRANS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].retrans_out
+#define TD_LOST_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].lost_out
+#define TD_SACKED_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].sacked_out
 #define TD_MAX_PKTS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].max_packets_out
 #define TD_MAX_PKTS_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].max_packets_seq
 
@@ -257,6 +260,48 @@ static inline void set_cwnd_cnt(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_CWND_CNT(tp, tp->curr_tdn_id) : &tp->snd_cwnd_cnt) = val;
+}
+
+/* Return retrans_out of current TDN or the default variable value. */
+static inline u32 td_retrans_out(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RETRANS_OUT(tp, tp->curr_tdn_id) : tp->retrans_out;
+}
+
+/* Assign val to retrans_out of current TDN or the default variable. */
+static inline void set_retrans_out(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RETRANS_OUT(tp, tp->curr_tdn_id) : &tp->retrans_out) = val;
+}
+
+/* Return lost_out of current TDN or the default variable value. */
+static inline u32 td_lost_out(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_LOST_OUT(tp, tp->curr_tdn_id) : tp->lost_out;
+}
+
+/* Assign val to lost_out of current TDN or the default variable. */
+static inline void set_lost_out(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_LOST_OUT(tp, tp->curr_tdn_id) : &tp->lost_out) = val;
+}
+
+/* Return sacked_out of current TDN or the default variable value. */
+static inline u32 td_sacked_out(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_SACKED_OUT(tp, tp->curr_tdn_id) : tp->sacked_out;
+}
+
+/* Assign val to sacked_out of current TDN or the default variable. */
+static inline void set_sacked_out(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_SACKED_OUT(tp, tp->curr_tdn_id) : &tp->sacked_out) = val;
 }
 
 #else

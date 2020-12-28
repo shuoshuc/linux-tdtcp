@@ -2758,6 +2758,14 @@ int tcp_disconnect(struct sock *sk, int flags)
 	tp->reord_seen = 0;
 	tp->retrans_out = 0;
 	tp->sacked_out = 0;
+	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP)) {
+		for (tdn = 0;
+		     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
+		     tdn++) {
+			tp->td_subf[tdn].retrans_out = 0;
+			tp->td_subf[tdn].sacked_out = 0;
+		}
+	}
 	tp->tlp_high_seq = 0;
 	tp->last_oow_ack_time = 0;
 	/* There's a bubble in the pipe until at least the first ACK. */
@@ -3483,10 +3491,10 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_rcv_mss = icsk->icsk_ack.rcv_mss;
 
 	info->tcpi_unacked = td_pkts_out(tp);
-	info->tcpi_sacked = tp->sacked_out;
+	info->tcpi_sacked = td_sacked_out(tp);
 
-	info->tcpi_lost = tp->lost_out;
-	info->tcpi_retrans = tp->retrans_out;
+	info->tcpi_lost = td_lost_out(tp);
+	info->tcpi_retrans = td_retrans_out(tp);
 
 	now = tcp_jiffies32;
 	info->tcpi_last_data_sent = jiffies_to_msecs(now - tp->lsndtime);
