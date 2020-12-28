@@ -67,7 +67,7 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned int prior_packets = tp->packets_out;
+	unsigned int prior_packets = td_pkts_out(tp);
 
 	WRITE_ONCE(tp->snd_nxt, TCP_SKB_CB(skb)->end_seq);
 
@@ -77,7 +77,7 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 	if (tp->highest_sack == NULL)
 		tp->highest_sack = skb;
 
-	tp->packets_out += tcp_skb_pcount(skb);
+	set_pkts_out(tp, td_pkts_out(tp) + tcp_skb_pcount(skb));
 	if (!prior_packets || icsk->icsk_pending == ICSK_TIME_LOSS_PROBE)
 		tcp_rearm_rto(sk);
 
@@ -143,16 +143,16 @@ void tcp_cwnd_restart(struct sock *sk, s32 delta)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 restart_cwnd = tcp_init_cwnd(tp, __sk_dst_get(sk));
-	u32 cwnd = tp->snd_cwnd;
+	u32 cwnd = td_cwnd(tp);
 
 	tcp_ca_event(sk, CA_EVENT_CWND_RESTART);
 
-	tp->snd_ssthresh = tcp_current_ssthresh(sk);
+	set_ssthresh(tp, tcp_current_ssthresh(sk));
 	restart_cwnd = min(restart_cwnd, cwnd);
 
 	while ((delta -= inet_csk(sk)->icsk_rto) > 0 && cwnd > restart_cwnd)
 		cwnd >>= 1;
-	tp->snd_cwnd = max(cwnd, restart_cwnd);
+	set_cwnd(tp, max(cwnd, restart_cwnd));
 	tp->snd_cwnd_stamp = tcp_jiffies32;
 	tp->snd_cwnd_used = 0;
 }
@@ -910,7 +910,7 @@ static void tcp_tsq_write(struct sock *sk)
 		struct tcp_sock *tp = tcp_sk(sk);
 
 		if (tp->lost_out > tp->retrans_out &&
-		    tp->snd_cwnd > tcp_packets_in_flight(tp)) {
+		    td_cwnd(tp) > tcp_packets_in_flight(tp)) {
 			tcp_mstamp_refresh(tp);
 			tcp_xmit_retransmit_queue(sk);
 		}
@@ -1348,7 +1348,7 @@ static void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int de
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	tp->packets_out -= decr;
+	set_pkts_out(tp, td_pkts_out(tp) - decr);
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
 		tp->sacked_out -= decr;
@@ -1749,9 +1749,9 @@ static void tcp_cwnd_application_limited(struct sock *sk)
 		/* Limited by application or receiver window. */
 		u32 init_win = tcp_init_cwnd(tp, __sk_dst_get(sk));
 		u32 win_used = max(tp->snd_cwnd_used, init_win);
-		if (win_used < tp->snd_cwnd) {
-			tp->snd_ssthresh = tcp_current_ssthresh(sk);
-			tp->snd_cwnd = (tp->snd_cwnd + win_used) >> 1;
+		if (win_used < td_cwnd(tp)) {
+			set_ssthresh(tp, tcp_current_ssthresh(sk));
+			set_cwnd(tp, (td_cwnd(tp) + win_used) >> 1);
 		}
 		tp->snd_cwnd_used = 0;
 	}
@@ -1766,11 +1766,11 @@ static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 	/* Track the maximum number of outstanding packets in each
 	 * window, and remember whether we were cwnd-limited then.
 	 */
-	if (!before(tp->snd_una, tp->max_packets_seq) ||
-	    tp->packets_out > tp->max_packets_out) {
-		tp->max_packets_out = tp->packets_out;
-		tp->max_packets_seq = tp->snd_nxt;
-		tp->is_cwnd_limited = is_cwnd_limited;
+	if (!before(td_una(tp), td_max_pkts_seq(tp)) ||
+	    td_pkts_out(tp) > td_max_pkts_out(tp)) {
+		set_max_pkts_out(tp, td_pkts_out(tp));
+		set_max_pkts_seq(tp, td_nxt(tp));
+		set_cwnd_limited(tp, is_cwnd_limited);
 	}
 
 	if (tcp_is_cwnd_limited(sk)) {
@@ -1779,8 +1779,8 @@ static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 		tp->snd_cwnd_stamp = tcp_jiffies32;
 	} else {
 		/* Network starves. */
-		if (tp->packets_out > tp->snd_cwnd_used)
-			tp->snd_cwnd_used = tp->packets_out;
+		if (td_pkts_out(tp) > tp->snd_cwnd_used)
+			tp->snd_cwnd_used = td_pkts_out(tp);
 
 		if (sock_net(sk)->ipv4.sysctl_tcp_slow_start_after_idle &&
 		    (s32)(tcp_jiffies32 - tp->snd_cwnd_stamp) >= inet_csk(sk)->icsk_rto &&
@@ -1835,7 +1835,7 @@ static bool tcp_nagle_check(bool partial, const struct tcp_sock *tp,
 {
 	return partial &&
 		((nonagle & TCP_NAGLE_CORK) ||
-		 (!nonagle && tp->packets_out && tcp_minshall_check(tp)));
+		 (!nonagle && td_pkts_out(tp) && tcp_minshall_check(tp)));
 }
 
 /* Return how many segs we'd like on a TSO packet,
@@ -1922,7 +1922,7 @@ static inline unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
 		return 1;
 
 	in_flight = tcp_packets_in_flight(tp);
-	cwnd = td_cwnd_or_default(tp);
+	cwnd = td_cwnd(tp);
 	if (in_flight >= cwnd)
 		return 0;
 
@@ -2078,12 +2078,12 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 	in_flight = tcp_packets_in_flight(tp);
 
 	BUG_ON(tcp_skb_pcount(skb) <= 1);
-	BUG_ON(tp->snd_cwnd <= in_flight);
+	BUG_ON(td_cwnd(tp) <= in_flight);
 
 	send_win = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
 
 	/* From in_flight test above, we know that cwnd > in_flight.  */
-	cong_win = (td_cwnd_or_default(tp) - in_flight) * tp->mss_cache;
+	cong_win = (td_cwnd(tp) - in_flight) * tp->mss_cache;
 
 	limit = min(send_win, cong_win);
 
@@ -2097,7 +2097,7 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 
 	win_divisor = READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_tso_win_divisor);
 	if (win_divisor) {
-		u32 chunk = min(tp->snd_wnd, tp->snd_cwnd * tp->mss_cache);
+		u32 chunk = min(td_cwnd(tp), td_cwnd(tp) * tp->mss_cache);
 
 		/* If at least some fraction of a window is available,
 		 * just use it.
@@ -2225,7 +2225,7 @@ static int tcp_mtu_probe(struct sock *sk)
 	if (likely(!icsk->icsk_mtup.enabled ||
 		   icsk->icsk_mtup.probe_size ||
 		   inet_csk(sk)->icsk_ca_state != TCP_CA_Open ||
-		   tp->snd_cwnd < 11 ||
+		   td_cwnd(tp) < 11 ||
 		   tp->rx_opt.num_sacks || tp->rx_opt.dsack))
 		return -1;
 
@@ -2261,7 +2261,7 @@ static int tcp_mtu_probe(struct sock *sk)
 		return 0;
 
 	/* Do we need to wait to drain cwnd? With none in flight, don't stall */
-	if (tcp_packets_in_flight(tp) + 2 > tp->snd_cwnd) {
+	if (tcp_packets_in_flight(tp) + 2 > td_cwnd(tp)) {
 		if (!tcp_packets_in_flight(tp))
 			return -1;
 		else
@@ -2332,7 +2332,7 @@ static int tcp_mtu_probe(struct sock *sk)
 	if (!tcp_transmit_skb(sk, nskb, 1, GFP_ATOMIC)) {
 		/* Decrement cwnd here because we are sending
 		 * effectively two packets. */
-		tp->snd_cwnd--;
+		set_cwnd(tp, td_cwnd(tp) - 1);
 		tcp_event_new_data_sent(sk, nskb);
 
 		icsk->icsk_mtup.probe_size = tcp_mss_to_mtu(sk, nskb->len);
@@ -2596,12 +2596,11 @@ repair:
 		/* Send one loss probe per tail loss episode. */
 		if (push_one != 2)
 			tcp_schedule_loss_probe(sk, false);
-		is_cwnd_limited |= (tcp_packets_in_flight(tp) >=
-				    td_cwnd_or_default(tp));
+		is_cwnd_limited |= (tcp_packets_in_flight(tp) >= td_cwnd(tp));
 		tcp_cwnd_validate(sk, is_cwnd_limited);
 		return false;
 	}
-	return !tp->packets_out && !tcp_write_queue_empty(sk);
+	return !td_pkts_out(tp) && !tcp_write_queue_empty(sk);
 }
 
 bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
@@ -2622,7 +2621,7 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	 * not in loss recovery, that are either limited by cwnd or application.
 	 */
 	if ((early_retrans != 3 && early_retrans != 4) ||
-	    !tp->packets_out || !tcp_is_sack(tp) ||
+	    !td_pkts_out(tp) || !tcp_is_sack(tp) ||
 	    (icsk->icsk_ca_state != TCP_CA_Open &&
 	     icsk->icsk_ca_state != TCP_CA_CWR))
 		return false;
@@ -2633,7 +2632,7 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	 */
 	if (tp->srtt_us) {
 		timeout = usecs_to_jiffies(tp->srtt_us >> 2);
-		if (tp->packets_out == 1)
+		if (td_pkts_out(tp) == 1)
 			timeout += TCP_RTO_MIN;
 		else
 			timeout += TCP_TIMEOUT_MIN;
@@ -2684,17 +2683,17 @@ void tcp_send_loss_probe(struct sock *sk)
 	tp->tlp_retrans = 0;
 	skb = tcp_send_head(sk);
 	if (skb && tcp_snd_wnd_test(tp, skb, mss)) {
-		pcount = tp->packets_out;
+		pcount = td_pkts_out(tp);
 		tcp_write_xmit(sk, mss, TCP_NAGLE_OFF, 2, GFP_ATOMIC);
-		if (tp->packets_out > pcount)
+		if (td_pkts_out(tp) > pcount)
 			goto probe_sent;
 		goto rearm_timer;
 	}
 	skb = skb_rb_last(&sk->tcp_rtx_queue);
 	if (unlikely(!skb)) {
-		WARN_ONCE(tp->packets_out,
+		WARN_ONCE(td_pkts_out(tp),
 			  "invalid inflight: %u state %u cwnd %u mss %d\n",
-			  tp->packets_out, sk->sk_state, tp->snd_cwnd, mss);
+			  td_pkts_out(tp), sk->sk_state, td_cwnd(tp), mss);
 		inet_csk(sk)->icsk_pending = 0;
 		return;
 	}
@@ -3174,7 +3173,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	u32 max_segs;
 	int mib_idx;
 
-	if (!tp->packets_out)
+	if (!td_pkts_out(tp))
 		return;
 
 	rtx_head = tcp_rtx_queue_head(sk);
@@ -3191,7 +3190,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 		if (!hole)
 			tp->retransmit_skb_hint = skb;
 
-		segs = td_cwnd_or_default(tp) - tcp_packets_in_flight(tp);
+		segs = td_cwnd(tp) - tcp_packets_in_flight(tp);
 		if (segs <= 0)
 			break;
 		sacked = TCP_SKB_CB(skb)->sacked;
@@ -3613,7 +3612,7 @@ static void tcp_connect_queue_skb(struct sock *sk, struct sk_buff *skb)
 	sk_wmem_queued_add(sk, skb->truesize);
 	sk_mem_charge(sk, skb->truesize);
 	WRITE_ONCE(tp->write_seq, tcb->end_seq);
-	tp->packets_out += tcp_skb_pcount(skb);
+	set_pkts_out(tp, td_pkts_out(tp) + tcp_skb_pcount(skb));
 }
 
 /* Build and send a SYN with data and (cached) Fast Open cookie. However,
@@ -3696,7 +3695,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 
 	/* data was not sent, put it in write_queue */
 	__skb_queue_tail(&sk->sk_write_queue, syn_data);
-	tp->packets_out -= tcp_skb_pcount(syn_data);
+	set_pkts_out(tp, td_pkts_out(tp) - tcp_skb_pcount(syn_data));
 
 fallback:
 	/* Send a regular SYN with Fast Open cookie request option */
@@ -3965,7 +3964,7 @@ void tcp_send_probe0(struct sock *sk)
 
 	err = tcp_write_wakeup(sk, LINUX_MIB_TCPWINPROBE);
 
-	if (tp->packets_out || tcp_write_queue_empty(sk)) {
+	if (td_pkts_out(tp) || tcp_write_queue_empty(sk)) {
 		/* Cancel probe timer, if it is not required. */
 		icsk->icsk_probes_out = 0;
 		icsk->icsk_backoff = 0;

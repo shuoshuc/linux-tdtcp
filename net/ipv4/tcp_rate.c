@@ -55,7 +55,7 @@ void tcp_rate_skb_sent(struct sock *sk, struct sk_buff *skb)
 	  * a spuriously small time interval, causing a spuriously high
 	  * bandwidth estimate.
 	  */
-	if (!tp->packets_out) {
+	if (!td_pkts_out(tp)) {
 		u64 tstamp_us = tcp_skb_timestamp_us(skb);
 
 		tp->first_tx_mstamp  = tstamp_us;
@@ -189,7 +189,7 @@ void tcp_rate_check_app_limited(struct sock *sk)
 	    /* Nothing in sending host's qdisc queues or NIC tx queue. */
 	    sk_wmem_alloc_get(sk) < SKB_TRUESIZE(1) &&
 	    /* We are not limited by CWND. */
-	    tcp_packets_in_flight(tp) < tp->snd_cwnd &&
+	    tcp_packets_in_flight(tp) < td_cwnd(tp) &&
 	    /* All lost packets have been retransmitted. */
 	    tp->lost_out <= tp->retrans_out)
 		tp->app_limited =

@@ -178,7 +178,7 @@ void tcp_init_congestion_control(struct sock *sk)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 
-	tcp_sk(sk)->prior_ssthresh = 0;
+	set_prior_ssthresh(tcp_sk(sk), 0);
 	if (icsk->icsk_ca_ops->init)
 		icsk->icsk_ca_ops->init(sk);
 	if (tcp_ca_needs_ecn(sk))
@@ -399,10 +399,10 @@ int tcp_set_congestion_control(struct sock *sk, const char *name, bool load,
  */
 u32 tcp_slow_start(struct tcp_sock *tp, u32 acked)
 {
-	u32 cwnd = min(tp->snd_cwnd + acked, tp->snd_ssthresh);
+	u32 cwnd = min(td_cwnd(tp) + acked, td_ssthresh(tp));
 
-	acked -= cwnd - tp->snd_cwnd;
-	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
+	acked -= cwnd - td_cwnd(tp);
+	set_cwnd(tp, min(cwnd, tp->snd_cwnd_clamp));
 
 	return acked;
 }
@@ -414,19 +414,19 @@ EXPORT_SYMBOL_GPL(tcp_slow_start);
 void tcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked)
 {
 	/* If credits accumulated at a higher w, apply them gently now. */
-	if (tp->snd_cwnd_cnt >= w) {
-		tp->snd_cwnd_cnt = 0;
-		tp->snd_cwnd++;
+	if (td_cwnd_cnt(tp) >= w) {
+		set_cwnd_cnt(tp, 0);
+		set_cwnd(tp, td_cwnd(tp) + 1);
 	}
 
-	tp->snd_cwnd_cnt += acked;
-	if (tp->snd_cwnd_cnt >= w) {
-		u32 delta = tp->snd_cwnd_cnt / w;
+	set_cwnd_cnt(tp, td_cwnd_cnt(tp) + acked);
+	if (td_cwnd_cnt(tp) >= w) {
+		u32 delta = td_cwnd_cnt(tp) / w;
 
-		tp->snd_cwnd_cnt -= delta * w;
-		tp->snd_cwnd += delta;
+		set_cwnd_cnt(tp, td_cwnd_cnt(tp) - delta * w);
+		set_cwnd(tp, td_cwnd(tp) + delta);
 	}
-	tp->snd_cwnd = min(tp->snd_cwnd, tp->snd_cwnd_clamp);
+	set_cwnd(tp, min(td_cwnd(tp), tp->snd_cwnd_clamp));
 }
 EXPORT_SYMBOL_GPL(tcp_cong_avoid_ai);
 
@@ -451,7 +451,7 @@ void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 			return;
 	}
 	/* In dangerous area, increase slowly. */
-	tcp_cong_avoid_ai(tp, tp->snd_cwnd, acked);
+	tcp_cong_avoid_ai(tp, td_cwnd(tp), acked);
 }
 EXPORT_SYMBOL_GPL(tcp_reno_cong_avoid);
 
@@ -460,7 +460,7 @@ u32 tcp_reno_ssthresh(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(tp->snd_cwnd >> 1U, 2U);
+	return max(td_cwnd(tp) >> 1U, 2U);
 }
 EXPORT_SYMBOL_GPL(tcp_reno_ssthresh);
 
@@ -468,7 +468,7 @@ u32 tcp_reno_undo_cwnd(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(tp->snd_cwnd, tp->prior_cwnd);
+	return max(td_cwnd(tp), td_prior_cwnd(tp));
 }
 EXPORT_SYMBOL_GPL(tcp_reno_undo_cwnd);
 

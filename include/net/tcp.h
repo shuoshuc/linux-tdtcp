@@ -39,6 +39,7 @@
 #include <net/inet_ecn.h>
 #include <net/dst.h>
 #include <net/mptcp.h>
+#include <net/tdtcp.h>
 
 #include <linux/seq_file.h>
 #include <linux/memcontrol.h>
@@ -1203,19 +1204,19 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
-	return tp->packets_out - tcp_left_out(tp) + tp->retrans_out;
+	return td_pkts_out(tp) - tcp_left_out(tp) + tp->retrans_out;
 }
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
 
 static inline bool tcp_in_slow_start(const struct tcp_sock *tp)
 {
-	return tp->snd_cwnd < tp->snd_ssthresh;
+	return td_cwnd(tp) < td_ssthresh(tp);
 }
 
 static inline bool tcp_in_initial_slowstart(const struct tcp_sock *tp)
 {
-	return tp->snd_ssthresh >= TCP_INFINITE_SSTHRESH;
+	return td_ssthresh(tp) >= TCP_INFINITE_SSTHRESH;
 }
 
 static inline bool tcp_in_cwnd_reduction(const struct sock *sk)
@@ -1233,15 +1234,15 @@ static inline __u32 tcp_current_ssthresh(const struct sock *sk)
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_in_cwnd_reduction(sk))
-		return tp->snd_ssthresh;
+		return td_ssthresh(tp);
 	else
-		return max(tp->snd_ssthresh,
-			   ((tp->snd_cwnd >> 1) +
-			    (tp->snd_cwnd >> 2)));
+		return max(td_ssthresh(tp),
+			   ((td_cwnd(tp) >> 1) +
+			    (td_cwnd(tp) >> 2)));
 }
 
 /* Use define here intentionally to get WARN_ON location shown at the caller */
-#define tcp_verify_left_out(tp)	WARN_ON(tcp_left_out(tp) > tp->packets_out)
+#define tcp_verify_left_out(tp)	WARN_ON(tcp_left_out(tp) > td_pkts_out(tp))
 
 void tcp_enter_cwr(struct sock *sk);
 __u32 tcp_init_cwnd(const struct tcp_sock *tp, const struct dst_entry *dst);
@@ -1279,9 +1280,9 @@ static inline bool tcp_is_cwnd_limited(const struct sock *sk)
 
 	/* If in slow start, ensure cwnd grows to twice what was ACKed. */
 	if (tcp_in_slow_start(tp))
-		return tp->snd_cwnd < 2 * tp->max_packets_out;
+		return td_cwnd(tp) < 2 * td_max_pkts_out(tp);
 
-	return tp->is_cwnd_limited;
+	return td_cwnd_limited(tp);
 }
 
 /* BBR congestion control needs pacing.
@@ -1336,7 +1337,7 @@ static inline unsigned long tcp_probe0_when(const struct sock *sk,
 
 static inline void tcp_check_probe_timer(struct sock *sk)
 {
-	if (!tcp_sk(sk)->packets_out && !inet_csk(sk)->icsk_pending)
+	if (!td_pkts_out(tcp_sk(sk)) && !inet_csk(sk)->icsk_pending)
 		tcp_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
 				     tcp_probe0_base(sk), TCP_RTO_MAX);
 }
@@ -1386,7 +1387,7 @@ static inline void tcp_slow_start_after_idle_check(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	s32 delta;
 
-	if (!sock_net(sk)->ipv4.sysctl_tcp_slow_start_after_idle || tp->packets_out ||
+	if (!sock_net(sk)->ipv4.sysctl_tcp_slow_start_after_idle || td_pkts_out(tp) ||
 	    ca_ops->cong_control)
 		return;
 	delta = tcp_jiffies32 - tp->lsndtime;
@@ -1923,7 +1924,7 @@ static inline bool inet_sk_transparent(const struct sock *sk)
  */
 static inline bool tcp_stream_is_thin(struct tcp_sock *tp)
 {
-	return tp->packets_out < 4 && !tcp_in_initial_slowstart(tp);
+	return td_pkts_out(tp) < 4 && !tcp_in_initial_slowstart(tp);
 }
 
 /* /proc */

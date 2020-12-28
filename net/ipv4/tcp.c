@@ -427,6 +427,9 @@ void tcp_init_sock(struct sock *sk)
 	 * algorithms that we must have the following bandaid to talk
 	 * efficiently to them.  -DaveM
 	 */
+	/* Note: we will hold off initializing subflow cwnd until the handshake
+	 * happens later.
+	 */
 	tp->snd_cwnd = TCP_INIT_CWND;
 
 	/* There's a bubble in the pipe until at least the first ACK. */
@@ -434,6 +437,9 @@ void tcp_init_sock(struct sock *sk)
 
 	/* See draft-stevens-tcpca-spec-01 for discussion of the
 	 * initialization of these values.
+	 */
+	/* Note: we will hold off initializing subflow ssthresh until the handshake
+	 * happens later.
 	 */
 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
@@ -2642,7 +2648,7 @@ void tcp_write_queue_purge(struct sock *sk)
 	INIT_LIST_HEAD(&tcp_sk(sk)->tsorted_sent_queue);
 	sk_mem_reclaim(sk);
 	tcp_clear_all_retrans_hints(tcp_sk(sk));
-	tcp_sk(sk)->packets_out = 0;
+	set_pkts_out(tcp_sk(sk), 0);
 	inet_csk(sk)->icsk_backoff = 0;
 }
 
@@ -2653,6 +2659,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 	struct tcp_sock *tp = tcp_sk(sk);
 	int old_state = sk->sk_state;
 	u32 seq;
+	u8 tdn;
 
 	if (old_state != TCP_CLOSE)
 		tcp_set_state(sk, TCP_CLOSE);
@@ -2707,6 +2714,15 @@ int tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd = TCP_INIT_CWND;
 	tp->snd_cwnd_cnt = 0;
+	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP)) {
+		for (tdn = 0;
+		     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
+		     tdn++) {
+			tp->td_subf[tdn].snd_ssthresh = TCP_INFINITE_SSTHRESH;
+			tp->td_subf[tdn].snd_cwnd = TCP_INIT_CWND;
+			tp->td_subf[tdn].snd_cwnd_cnt = 0;
+		}
+	}
 	tp->window_clamp = 0;
 	tp->delivered = 0;
 	tp->delivered_ce = 0;
@@ -3425,7 +3441,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_max_pacing_rate = rate64;
 
 	info->tcpi_reordering = tp->reordering;
-	info->tcpi_snd_cwnd = tp->snd_cwnd;
+	info->tcpi_snd_cwnd = td_cwnd(tp);
 
 	if (info->tcpi_state == TCP_LISTEN) {
 		/* listeners aliased fields :
@@ -3466,7 +3482,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_snd_mss = tp->mss_cache;
 	info->tcpi_rcv_mss = icsk->icsk_ack.rcv_mss;
 
-	info->tcpi_unacked = tp->packets_out;
+	info->tcpi_unacked = td_pkts_out(tp);
 	info->tcpi_sacked = tp->sacked_out;
 
 	info->tcpi_lost = tp->lost_out;
@@ -3481,7 +3497,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_rcv_ssthresh = tp->rcv_ssthresh;
 	info->tcpi_rtt = tp->srtt_us >> 3;
 	info->tcpi_rttvar = tp->mdev_us >> 2;
-	info->tcpi_snd_ssthresh = tp->snd_ssthresh;
+	info->tcpi_snd_ssthresh = td_ssthresh(tp);
 	info->tcpi_advmss = tp->advmss;
 
 	info->tcpi_rcv_rtt = tp->rcv_rtt_est.rtt_us >> 3;
@@ -3579,13 +3595,13 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	rate64 = tcp_compute_delivery_rate(tp);
 	nla_put_u64_64bit(stats, TCP_NLA_DELIVERY_RATE, rate64, TCP_NLA_PAD);
 
-	nla_put_u32(stats, TCP_NLA_SND_CWND, tp->snd_cwnd);
+	nla_put_u32(stats, TCP_NLA_SND_CWND, td_cwnd(tp));
 	nla_put_u32(stats, TCP_NLA_REORDERING, tp->reordering);
 	nla_put_u32(stats, TCP_NLA_MIN_RTT, tcp_min_rtt(tp));
 
 	nla_put_u8(stats, TCP_NLA_RECUR_RETRANS, inet_csk(sk)->icsk_retransmits);
 	nla_put_u8(stats, TCP_NLA_DELIVERY_RATE_APP_LMT, !!tp->rate_app_limited);
-	nla_put_u32(stats, TCP_NLA_SND_SSTHRESH, tp->snd_ssthresh);
+	nla_put_u32(stats, TCP_NLA_SND_SSTHRESH, td_ssthresh(tp));
 	nla_put_u32(stats, TCP_NLA_DELIVERED, tp->delivered);
 	nla_put_u32(stats, TCP_NLA_DELIVERED_CE, tp->delivered_ce);
 

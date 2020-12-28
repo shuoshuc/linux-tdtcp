@@ -100,7 +100,7 @@ static int tcp_out_of_resources(struct sock *sk, bool do_reset)
 		 *      1. Last segment was sent recently. */
 		if ((s32)(tcp_jiffies32 - tp->lsndtime) <= TCP_TIMEWAIT_LEN ||
 		    /*  2. Window is closed. */
-		    (!tp->snd_wnd && !tp->packets_out))
+		    (!tp->snd_wnd && !td_pkts_out(tp)))
 			do_reset = true;
 		if (do_reset)
 			tcp_send_active_reset(sk, GFP_ATOMIC);
@@ -348,7 +348,7 @@ static void tcp_probe_timer(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	int max_probes;
 
-	if (tp->packets_out || !skb) {
+	if (td_pkts_out(tp) || !skb) {
 		icsk->icsk_probes_out = 0;
 		return;
 	}
@@ -454,7 +454,7 @@ void tcp_retransmit_timer(struct sock *sk)
 		return;
 	}
 
-	if (!tp->packets_out)
+	if (!td_pkts_out(tp))
 		return;
 
 	skb = tcp_rtx_queue_head(sk);
@@ -700,7 +700,7 @@ static void tcp_keepalive_timer (struct timer_list *t)
 	elapsed = keepalive_time_when(tp);
 
 	/* It is alive without keepalive 8) */
-	if (tp->packets_out || !tcp_write_queue_empty(sk))
+	if (td_pkts_out(tp) || !tcp_write_queue_empty(sk))
 		goto resched;
 
 	elapsed = keepalive_time_elapsed(tp);
