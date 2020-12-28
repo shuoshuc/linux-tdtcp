@@ -2592,7 +2592,7 @@ repair:
 
 	if (likely(sent_pkts)) {
 		if (tcp_in_cwnd_reduction(sk))
-			tp->prr_out += sent_pkts;
+			set_prr_out(tp, td_prr_out(tp) + sent_pkts);
 
 		/* Send one loss probe per tail loss episode. */
 		if (push_one != 2)
@@ -3226,7 +3226,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 		NET_ADD_STATS(sock_net(sk), mib_idx, tcp_skb_pcount(skb));
 
 		if (tcp_in_cwnd_reduction(sk))
-			tp->prr_out += tcp_skb_pcount(skb);
+			set_prr_out(tp, td_prr_out(tp) + tcp_skb_pcount(skb));
 
 		if (skb == rtx_head &&
 		    icsk->icsk_pending != ICSK_TIME_REO_TIMEOUT)

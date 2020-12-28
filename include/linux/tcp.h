@@ -454,6 +454,10 @@ struct tcp_sock {
 		u32	max_packets_out;
 		/* right edge of max_packets_out flight */
 		u32	max_packets_seq;
+		/* Number of newly delivered packets to receiver in Recovery. */
+		u32	prr_delivered;
+		/* Total number of pkts sent during Recovery. */
+		u32	prr_out;
 	} td_subf[16];
 #endif
 

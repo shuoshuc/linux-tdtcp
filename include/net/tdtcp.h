@@ -53,6 +53,8 @@
 #define TD_SACKED_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].sacked_out
 #define TD_MAX_PKTS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].max_packets_out
 #define TD_MAX_PKTS_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].max_packets_seq
+#define TD_PRR_DELIVERED(tp, tdn_id) (tp)->td_subf[tdn_id].prr_delivered
+#define TD_PRR_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].prr_out
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
@@ -302,6 +304,34 @@ static inline void set_sacked_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_SACKED_OUT(tp, tp->curr_tdn_id) : &tp->sacked_out) = val;
+}
+
+/* Return prr_delivered of current TDN or the default variable value. */
+static inline u32 td_prr_delivered(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PRR_DELIVERED(tp, tp->curr_tdn_id) : tp->prr_delivered;
+}
+
+/* Assign val to prr_delivered of current TDN or the default variable. */
+static inline void set_prr_delivered(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_PRR_DELIVERED(tp, tp->curr_tdn_id) : &tp->prr_delivered) = val;
+}
+
+/* Return prr_out of current TDN or the default variable value. */
+static inline u32 td_prr_out(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PRR_OUT(tp, tp->curr_tdn_id) : tp->prr_out;
+}
+
+/* Assign val to prr_out of current TDN or the default variable. */
+static inline void set_prr_out(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_PRR_OUT(tp, tp->curr_tdn_id) : &tp->prr_out) = val;
 }
 
 #else

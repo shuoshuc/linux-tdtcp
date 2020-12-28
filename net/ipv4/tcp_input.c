@@ -2455,8 +2455,8 @@ static void tcp_init_cwnd_reduction(struct sock *sk)
 	tp->tlp_high_seq = 0;
 	set_cwnd_cnt(tp, 0);
 	set_prior_cwnd(tp, td_cwnd(tp));
-	tp->prr_delivered = 0;
-	tp->prr_out = 0;
+	set_prr_delivered(tp, 0);
+	set_prr_out(tp, 0);
 	set_ssthresh(tp, inet_csk(sk)->icsk_ca_ops->ssthresh(sk));
 	tcp_ecn_queue_cwr(tp);
 }
@@ -2470,21 +2470,21 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag)
 	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!td_prior_cwnd(tp)))
 		return;
 
-	tp->prr_delivered += newly_acked_sacked;
+	set_prr_delivered(tp, td_prr_delivered(tp) + newly_acked_sacked);
 	if (delta < 0) {
-		u64 dividend = (u64)td_ssthresh(tp) * tp->prr_delivered +
+		u64 dividend = (u64)td_ssthresh(tp) * td_prr_delivered(tp) +
 			       td_prior_cwnd(tp) - 1;
-		sndcnt = div_u64(dividend, td_prior_cwnd(tp)) - tp->prr_out;
+		sndcnt = div_u64(dividend, td_prior_cwnd(tp)) - td_prr_out(tp);
 	} else if ((flag & (FLAG_RETRANS_DATA_ACKED | FLAG_LOST_RETRANS)) ==
 		   FLAG_RETRANS_DATA_ACKED) {
 		sndcnt = min_t(int, delta,
-			       max_t(int, tp->prr_delivered - tp->prr_out,
+			       max_t(int, td_prr_delivered(tp) - td_prr_out(tp),
 				     newly_acked_sacked) + 1);
 	} else {
 		sndcnt = min(delta, newly_acked_sacked);
 	}
 	/* Force a fast retransmit upon entering fast recovery */
-	sndcnt = max(sndcnt, (tp->prr_out ? 0 : 1));
+	sndcnt = max(sndcnt, (td_prr_out(tp) ? 0 : 1));
 	set_cwnd(tp, tcp_packets_in_flight(tp) + sndcnt);
 }
 
