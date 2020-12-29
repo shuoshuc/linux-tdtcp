@@ -903,7 +903,7 @@ static void tcp_check_sack_reordering(struct sock *sk, const u32 low_seq,
 			 td_reordering(tp),
 			 0,
 			 td_sacked_out(tp),
-			 tp->undo_marker ? td_undo_retrans(tp) : 0);
+			 td_undo_marker(tp) ? td_undo_retrans(tp) : 0);
 #endif
 		set_reordering(tp,
 			       min_t(u32,
@@ -1075,18 +1075,18 @@ static bool tcp_is_sackblock_valid(struct tcp_sock *tp, bool is_dsack,
 	if (after(start_seq, tp->snd_una))
 		return true;
 
-	if (!is_dsack || !tp->undo_marker)
+	if (!is_dsack || !td_undo_marker(tp))
 		return false;
 
 	/* ...Then it's D-SACK, and must reside below snd_una completely */
 	if (after(end_seq, tp->snd_una))
 		return false;
 
-	if (!before(start_seq, tp->undo_marker))
+	if (!before(start_seq, td_undo_marker(tp)))
 		return true;
 
 	/* Too old */
-	if (!after(end_seq, tp->undo_marker))
+	if (!after(end_seq, td_undo_marker(tp)))
 		return false;
 
 	/* Undo_marker boundary crossing (overestimates a lot). Known already:
@@ -1122,9 +1122,9 @@ static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 	}
 
 	/* D-SACK for already forgotten data... Do dumb counting. */
-	if (dup_sack && tp->undo_marker && td_undo_retrans(tp) > 0 &&
+	if (dup_sack && td_undo_marker(tp) && td_undo_retrans(tp) > 0 &&
 	    !after(end_seq_0, prior_snd_una) &&
-	    after(end_seq_0, tp->undo_marker))
+	    after(end_seq_0, td_undo_marker(tp)))
 		set_undo_retrans(tp, td_undo_retrans(tp) - 1);
 
 	return dup_sack;
@@ -1210,8 +1210,8 @@ static u8 tcp_sacktag_one(struct sock *sk,
 
 	/* Account D-SACK for retransmitted packet. */
 	if (dup_sack && (sacked & TCPCB_RETRANS)) {
-		if (tp->undo_marker && td_undo_retrans(tp) > 0 &&
-		    after(end_seq, tp->undo_marker))
+		if (td_undo_marker(tp) && td_undo_retrans(tp) > 0 &&
+		    after(end_seq, td_undo_marker(tp)))
 			set_undo_retrans(tp, td_undo_retrans(tp) - 1);
 		if ((sacked & TCPCB_SACKED_ACKED) &&
 		    before(start_seq, state->reord))
@@ -1245,7 +1245,7 @@ static u8 tcp_sacktag_one(struct sock *sk,
 				    before(start_seq, state->reord))
 					state->reord = start_seq;
 
-				if (!after(end_seq, tp->high_seq))
+				if (!after(end_seq, td_high_seq(tp)))
 					state->flag |= FLAG_ORIG_SACK_ACKED;
 				if (state->first_sackt == 0)
 					state->first_sackt = xmit_time;
@@ -1716,7 +1716,7 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 			int mib_idx;
 
 			if (dup_sack) {
-				if (!tp->undo_marker)
+				if (!td_undo_marker(tp))
 					mib_idx = LINUX_MIB_TCPDSACKIGNOREDNOUNDO;
 				else
 					mib_idx = LINUX_MIB_TCPDSACKIGNOREDOLD;
@@ -1847,7 +1847,7 @@ advance_sp:
 	for (j = 0; j < used_sacks; j++)
 		tp->recv_sack_cache[i++] = sp[j];
 
-	if (inet_csk(sk)->icsk_ca_state != TCP_CA_Loss || tp->undo_marker)
+	if (inet_csk(sk)->icsk_ca_state != TCP_CA_Loss || td_undo_marker(tp))
 		tcp_check_sack_reordering(sk, state->reord, 0);
 
 	tcp_verify_left_out(tp);
@@ -1942,14 +1942,14 @@ void tcp_clear_retrans(struct tcp_sock *tp)
 {
 	set_retrans_out(tp, 0);
 	set_lost_out(tp, 0);
-	tp->undo_marker = 0;
+	set_undo_marker(tp, 0);
 	set_undo_retrans(tp, -1);
 	set_sacked_out(tp, 0);
 }
 
 static inline void tcp_init_undo(struct tcp_sock *tp)
 {
-	tp->undo_marker = tp->snd_una;
+	set_undo_marker(tp, tp->snd_una);
 	/* Retransmission still in flight may cause DSACKs later. */
 	set_undo_retrans(tp, td_retrans_out(tp) ? : -1);
 }
@@ -2005,7 +2005,7 @@ void tcp_enter_loss(struct sock *sk)
 
 	/* Reduce ssthresh if it has not yet been made inside this window. */
 	if (icsk->icsk_ca_state <= TCP_CA_Disorder ||
-	    !after(tp->high_seq, tp->snd_una) ||
+	    !after(td_high_seq(tp), tp->snd_una) ||
 	    (icsk->icsk_ca_state == TCP_CA_Loss && !icsk->icsk_retransmits)) {
 		set_prior_ssthresh(tp, tcp_current_ssthresh(sk));
 		set_prior_cwnd(tp, td_cwnd(tp));
@@ -2025,7 +2025,7 @@ void tcp_enter_loss(struct sock *sk)
 		set_reordering(tp, min_t(unsigned int, td_reordering(tp),
 					 net->ipv4.sysctl_tcp_reordering));
 	tcp_set_ca_state(sk, TCP_CA_Loss);
-	tp->high_seq = tp->snd_nxt;
+	set_high_seq(tp, tp->snd_nxt);
 	tcp_ecn_queue_cwr(tp);
 
 	/* F-RTO RFC5682 sec 3.1 step 1: retransmit SND.UNA if no previous
@@ -2360,13 +2360,13 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 		}
 	}
 	tp->snd_cwnd_stamp = tcp_jiffies32;
-	tp->undo_marker = 0;
+	set_undo_marker(tp, 0);
 	tp->rack.advanced = 1; /* Force RACK to re-exam losses */
 }
 
 static inline bool tcp_may_undo(const struct tcp_sock *tp)
 {
-	return tp->undo_marker && (!td_undo_retrans(tp) || tcp_packet_delayed(tp));
+	return td_undo_marker(tp) && (!td_undo_retrans(tp) || tcp_packet_delayed(tp));
 }
 
 /* People celebrate: "We love our President!" */
@@ -2391,7 +2391,7 @@ static bool tcp_try_undo_recovery(struct sock *sk)
 	} else if (tp->rack.reo_wnd_persist) {
 		tp->rack.reo_wnd_persist--;
 	}
-	if (tp->snd_una == tp->high_seq && tcp_is_reno(tp)) {
+	if (tp->snd_una == td_high_seq(tp) && tcp_is_reno(tp)) {
 		/* Hold old state until something *above* high_seq
 		 * is ACKed. For Reno it is MUST to prevent false
 		 * fast retransmits (RFC2582). SACK TCP is safe. */
@@ -2409,7 +2409,7 @@ static bool tcp_try_undo_dsack(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (tp->undo_marker && !td_undo_retrans(tp)) {
+	if (td_undo_marker(tp) && !td_undo_retrans(tp)) {
 		tp->rack.reo_wnd_persist = min(TCP_RACK_RECOVERY_THRESH,
 					       tp->rack.reo_wnd_persist + 1);
 		DBGUNDO(sk, "D-SACK");
@@ -2456,7 +2456,7 @@ static void tcp_init_cwnd_reduction(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	tp->high_seq = tp->snd_nxt;
+	set_high_seq(tp, tp->snd_nxt);
 	tp->tlp_high_seq = 0;
 	set_cwnd_cnt(tp, 0);
 	set_prior_cwnd(tp, td_cwnd(tp));
@@ -2502,7 +2502,7 @@ static inline void tcp_end_cwnd_reduction(struct sock *sk)
 
 	/* Reset cwnd to ssthresh in CWR or Recovery (unless it's undone) */
 	if (td_ssthresh(tp) < TCP_INFINITE_SSTHRESH &&
-	    (inet_csk(sk)->icsk_ca_state == TCP_CA_CWR || tp->undo_marker)) {
+	    (inet_csk(sk)->icsk_ca_state == TCP_CA_CWR || td_undo_marker(tp))) {
 		set_cwnd(tp, td_ssthresh(tp));
 		tp->snd_cwnd_stamp = tcp_jiffies32;
 	}
@@ -2516,7 +2516,7 @@ void tcp_enter_cwr(struct sock *sk)
 
 	set_prior_ssthresh(tp, 0);
 	if (inet_csk(sk)->icsk_ca_state < TCP_CA_CWR) {
-		tp->undo_marker = 0;
+		set_undo_marker(tp, 0);
 		tcp_init_cwnd_reduction(sk);
 		tcp_set_ca_state(sk, TCP_CA_CWR);
 	}
@@ -2533,7 +2533,7 @@ static void tcp_try_keep_open(struct sock *sk)
 
 	if (inet_csk(sk)->icsk_ca_state != state) {
 		tcp_set_ca_state(sk, state);
-		tp->high_seq = tp->snd_nxt;
+		set_high_seq(tp, tp->snd_nxt);
 	}
 }
 
@@ -2622,10 +2622,10 @@ void tcp_simple_retransmit(struct sock *sk)
 	 * cwnd/ssthresh really reduced now.
 	 */
 	if (icsk->icsk_ca_state != TCP_CA_Loss) {
-		tp->high_seq = tp->snd_nxt;
+		set_high_seq(tp, tp->snd_nxt);
 		set_ssthresh(tp, tcp_current_ssthresh(sk));
 		set_prior_ssthresh(tp, 0);
-		tp->undo_marker = 0;
+		set_undo_marker(tp, 0);
 		tcp_set_ca_state(sk, TCP_CA_Loss);
 	}
 	tcp_xmit_retransmit_queue(sk);
@@ -2662,7 +2662,7 @@ static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
 			     int *rexmit)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	bool recovered = !before(tp->snd_una, tp->high_seq);
+	bool recovered = !before(tp->snd_una, td_high_seq(tp));
 
 	if ((flag & FLAG_SND_UNA_ADVANCED || rcu_access_pointer(tp->fastopen_rsk)) &&
 	    tcp_try_undo_loss(sk, false))
@@ -2676,11 +2676,11 @@ static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
 		    tcp_try_undo_loss(sk, true))
 			return;
 
-		if (after(tp->snd_nxt, tp->high_seq)) {
+		if (after(tp->snd_nxt, td_high_seq(tp))) {
 			if (flag & FLAG_DATA_SACKED || num_dupack)
 				tp->frto = 0; /* Step 3.a. loss was real */
 		} else if (flag & FLAG_SND_UNA_ADVANCED && !recovered) {
-			tp->high_seq = tp->snd_nxt;
+			set_high_seq(tp, tp->snd_nxt);
 			/* Step 2.b. Try send new data (but deferred until cwnd
 			 * is updated in tcp_ack()). Otherwise fall back to
 			 * the conventional recovery.
@@ -2703,7 +2703,7 @@ static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
 		/* A Reno DUPACK means new data in F-RTO step 2.b above are
 		 * delivered. Lower inflight to clock out (re)tranmissions.
 		 */
-		if (after(tp->snd_nxt, tp->high_seq) && num_dupack)
+		if (after(tp->snd_nxt, td_high_seq(tp)) && num_dupack)
 			tcp_add_reno_sack(sk, num_dupack);
 		else if (flag & FLAG_SND_UNA_ADVANCED)
 			tcp_reset_reno_sack(tp);
@@ -2716,7 +2716,7 @@ static bool tcp_try_undo_partial(struct sock *sk, u32 prior_snd_una)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (tp->undo_marker && tcp_packet_delayed(tp)) {
+	if (td_undo_marker(tp) && tcp_packet_delayed(tp)) {
 		/* Plain luck! Hole if filled with delayed
 		 * packet, rather than with a retransmit. Check reordering.
 		 */
@@ -2809,12 +2809,12 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 	if (icsk->icsk_ca_state == TCP_CA_Open) {
 		WARN_ON(td_retrans_out(tp) != 0);
 		set_retrans_stamp(tp, 0);
-	} else if (!before(tp->snd_una, tp->high_seq)) {
+	} else if (!before(tp->snd_una, td_high_seq(tp))) {
 		switch (icsk->icsk_ca_state) {
 		case TCP_CA_CWR:
 			/* CWR is to be held something *above* high_seq
 			 * is ACKed for CWR bit to reach receiver. */
-			if (tp->snd_una != tp->high_seq) {
+			if (tp->snd_una != td_high_seq(tp)) {
 				tcp_end_cwnd_reduction(sk);
 				tcp_set_ca_state(sk, TCP_CA_Open);
 			}
@@ -3115,7 +3115,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 			last_in_flight = TCP_SKB_CB(skb)->tx.in_flight;
 			if (before(start_seq, reord))
 				reord = start_seq;
-			if (!after(scb->end_seq, tp->high_seq))
+			if (!after(scb->end_seq, td_high_seq(tp)))
 				flag |= FLAG_ORIG_SACK_ACKED;
 		}
 
@@ -3551,7 +3551,7 @@ static void tcp_xmit_recovery(struct sock *sk, int rexmit)
 	if (unlikely(rexmit == REXMIT_NEW)) {
 		__tcp_push_pending_frames(sk, tcp_current_mss(sk),
 					  TCP_NAGLE_OFF);
-		if (after(tp->snd_nxt, tp->high_seq))
+		if (after(tp->snd_nxt, td_high_seq(tp)))
 			return;
 		tp->frto = 0;
 	}
@@ -5800,7 +5800,7 @@ void tcp_init_transfer(struct sock *sk, int bpf_op)
 	 * initRTO, we only reset cwnd when more than 1 SYN/SYN-ACK
 	 * retransmission has occurred.
 	 */
-	if (td_total_retrans(tp) > 1 && tp->undo_marker)
+	if (td_total_retrans(tp) > 1 && td_undo_marker(tp))
 		set_cwnd(tp, 1);
 	else
 		set_cwnd(tp, tcp_init_cwnd(tp, __sk_dst_get(sk)));
@@ -5926,9 +5926,9 @@ static void tcp_try_undo_spurious_syn(struct sock *sk)
 	 * original SYN timestamp.
 	 */
 	syn_stamp = td_retrans_stamp(tp);
-	if (tp->undo_marker && syn_stamp && tp->rx_opt.saw_tstamp &&
+	if (td_undo_marker(tp) && syn_stamp && tp->rx_opt.saw_tstamp &&
 	    syn_stamp == tp->rx_opt.rcv_tsecr)
-		tp->undo_marker = 0;
+		set_undo_marker(tp, 0);
 }
 
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,

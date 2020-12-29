@@ -60,6 +60,8 @@
 #define TD_TOTAL_RETRANS(tp, tdn_id) (tp)->td_subf[tdn_id].total_retrans
 #define TD_RETRANS_STAMP(tp, tdn_id) (tp)->td_subf[tdn_id].retrans_stamp
 #define TD_REORDERING(tp, tdn_id) (tp)->td_subf[tdn_id].reordering
+#define TD_HIGH_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].high_seq
+#define TD_UNDO_MARKER(tp, tdn_id) (tp)->td_subf[tdn_id].undo_marker
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
@@ -407,6 +409,34 @@ static inline void set_reordering(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_REORDERING(tp, tp->curr_tdn_id) : &tp->reordering) = val;
+}
+
+/* Return high_seq of current TDN or the default variable value. */
+static inline u32 td_high_seq(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_HIGH_SEQ(tp, tp->curr_tdn_id) : tp->high_seq;
+}
+
+/* Assign val to high_seq of current TDN or the default variable. */
+static inline void set_high_seq(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_HIGH_SEQ(tp, tp->curr_tdn_id) : &tp->high_seq) = val;
+}
+
+/* Return undo_marker of current TDN or the default variable value. */
+static inline u32 td_undo_marker(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_UNDO_MARKER(tp, tp->curr_tdn_id) : tp->undo_marker;
+}
+
+/* Assign val to undo_marker of current TDN or the default variable. */
+static inline void set_undo_marker(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_UNDO_MARKER(tp, tp->curr_tdn_id) : &tp->undo_marker) = val;
 }
 
 #else

@@ -468,6 +468,10 @@ struct tcp_sock {
 		u32	retrans_stamp;
 		/* Packet reordering length (default is 3, can change). */
 		u32	reordering;
+		/* snd_nxt at onset of congestion */
+		u32	high_seq;
+		/* snd_una upon a new recovery episode. */
+		u32	undo_marker;
 	} td_subf[16];
 #endif
 

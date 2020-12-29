@@ -572,6 +572,7 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 			WRITE_ONCE(TD_RETRANS_STAMP(newtp, i),
 				   div_u64(treq->snt_synack,
 					   USEC_PER_SEC / TCP_TS_HZ));
+			WRITE_ONCE(TD_UNDO_MARKER(newtp, i), treq->snt_isn);
 		}
 	}
 
