@@ -55,6 +55,11 @@
 #define TD_MAX_PKTS_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].max_packets_seq
 #define TD_PRR_DELIVERED(tp, tdn_id) (tp)->td_subf[tdn_id].prr_delivered
 #define TD_PRR_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].prr_out
+#define TD_DELIVERED(tp, tdn_id) (tp)->td_subf[tdn_id].delivered
+#define TD_UNDO_RETRANS(tp, tdn_id) (tp)->td_subf[tdn_id].undo_retrans
+#define TD_TOTAL_RETRANS(tp, tdn_id) (tp)->td_subf[tdn_id].total_retrans
+#define TD_RETRANS_STAMP(tp, tdn_id) (tp)->td_subf[tdn_id].retrans_stamp
+#define TD_REORDERING(tp, tdn_id) (tp)->td_subf[tdn_id].reordering
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
@@ -332,6 +337,76 @@ static inline void set_prr_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRR_OUT(tp, tp->curr_tdn_id) : &tp->prr_out) = val;
+}
+
+/* Return delivered of current TDN or the default variable value. */
+static inline u32 td_delivered(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_DELIVERED(tp, tp->curr_tdn_id) : tp->delivered;
+}
+
+/* Assign val to delivered of current TDN or the default variable. */
+static inline void set_delivered(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_DELIVERED(tp, tp->curr_tdn_id) : &tp->delivered) = val;
+}
+
+/* Return undo_retrans of current TDN or the default variable value. */
+static inline int td_undo_retrans(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_UNDO_RETRANS(tp, tp->curr_tdn_id) : tp->undo_retrans;
+}
+
+/* Assign val to undo_retrans of current TDN or the default variable. */
+static inline void set_undo_retrans(struct tcp_sock *tp, int val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_UNDO_RETRANS(tp, tp->curr_tdn_id) : &tp->undo_retrans) = val;
+}
+
+/* Return total_retrans of current TDN or the default variable value. */
+static inline u32 td_total_retrans(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_TOTAL_RETRANS(tp, tp->curr_tdn_id) : tp->total_retrans;
+}
+
+/* Assign val to total_retrans of current TDN or the default variable. */
+static inline void set_total_retrans(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_TOTAL_RETRANS(tp, tp->curr_tdn_id) : &tp->total_retrans) = val;
+}
+
+/* Return retrans_stamp of current TDN or the default variable value. */
+static inline u32 td_retrans_stamp(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RETRANS_STAMP(tp, tp->curr_tdn_id) : tp->retrans_stamp;
+}
+
+/* Assign val to retrans_stamp of current TDN or the default variable. */
+static inline void set_retrans_stamp(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RETRANS_STAMP(tp, tp->curr_tdn_id) : &tp->retrans_stamp) = val;
+}
+
+/* Return reordering of current TDN or the default variable value. */
+static inline u32 td_reordering(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_REORDERING(tp, tp->curr_tdn_id) : tp->reordering;
+}
+
+/* Assign val to reordering of current TDN or the default variable. */
+static inline void set_reordering(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_REORDERING(tp, tp->curr_tdn_id) : &tp->reordering) = val;
 }
 
 #else

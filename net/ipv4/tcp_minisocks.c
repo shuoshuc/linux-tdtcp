@@ -498,26 +498,11 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 
 	newtp->lsndtime = tcp_jiffies32;
 	newsk->sk_txhash = treq->txhash;
+	/* TDTCP subflow total_retrans are initialized below in the for loop. */
 	newtp->total_retrans = req->num_retrans;
 
 	tcp_init_xmit_timers(newsk);
 	WRITE_ONCE(newtp->write_seq, newtp->pushed_seq = treq->snt_isn + 1);
-
-	/* Initialize all subflows in the new socket, even though we might not
-	 * use all of them (num_tdn < 16).
-	 */
-	if(sk_is_tdtcp(newsk)) {
-		int i;
-		for (i = 0;
-		     i < sizeof(newtp->td_subf) / sizeof(newtp->td_subf[0]);
-		     i++) {
-			/* TODO: initialize subflow variables. */
-			WRITE_ONCE(TD_UNA(newtp, i), seq);
-			WRITE_ONCE(TD_NXT(newtp, i), seq);
-			WRITE_ONCE(TD_PREV_UNA(newtp, i), seq);
-			WRITE_ONCE(TD_PREV_NXT(newtp, i), seq);
-		}
-	}
 
 	if (sock_flag(newsk, SOCK_KEEPOPEN))
 		inet_csk_reset_keepalive_timer(newsk,
@@ -570,6 +555,25 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 	newtp->num_tdns = treq->num_tdns;
 	newtp->peer_num_tdns = treq->peer_num_tdns;
 #endif
+	/* Initialize all subflows in the new socket, even though we might not
+	 * use all of them (num_tdn < 16).
+	 */
+	if(sk_is_tdtcp(newsk)) {
+		int i;
+		for (i = 0;
+		     i < sizeof(newtp->td_subf) / sizeof(newtp->td_subf[0]);
+		     i++) {
+			/* TODO: initialize subflow variables. */
+			WRITE_ONCE(TD_UNA(newtp, i), seq);
+			WRITE_ONCE(TD_NXT(newtp, i), seq);
+			WRITE_ONCE(TD_PREV_UNA(newtp, i), seq);
+			WRITE_ONCE(TD_PREV_NXT(newtp, i), seq);
+			WRITE_ONCE(TD_TOTAL_RETRANS(newtp, i), req->num_retrans);
+			WRITE_ONCE(TD_RETRANS_STAMP(newtp, i),
+				   div_u64(treq->snt_synack,
+					   USEC_PER_SEC / TCP_TS_HZ));
+		}
+	}
 
 	tcp_bpf_clone(sk, newsk);
 

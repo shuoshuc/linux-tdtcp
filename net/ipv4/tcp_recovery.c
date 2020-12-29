@@ -32,7 +32,7 @@ static u32 tcp_rack_reo_wnd(const struct sock *sk)
 		if (inet_csk(sk)->icsk_ca_state >= TCP_CA_Recovery)
 			return 0;
 
-		if (td_sacked_out(tp) >= tp->reordering &&
+		if (td_sacked_out(tp) >= td_reordering(tp) &&
 		    !(sock_net(sk)->ipv4.sysctl_tcp_recovery & TCP_RACK_NO_DUPTHRESH))
 			return 0;
 	}
@@ -216,7 +216,7 @@ void tcp_rack_update_reo_wnd(struct sock *sk, struct rate_sample *rs)
 		tp->rack.reo_wnd_steps = min_t(u32, 0xFF,
 					       tp->rack.reo_wnd_steps + 1);
 		tp->rack.dsack_seen = 0;
-		tp->rack.last_delivered = tp->delivered;
+		tp->rack.last_delivered = td_delivered(tp);
 		tp->rack.reo_wnd_persist = TCP_RACK_RECOVERY_THRESH;
 	} else if (!tp->rack.reo_wnd_persist) {
 		tp->rack.reo_wnd_steps = 1;
@@ -233,7 +233,7 @@ void tcp_newreno_mark_lost(struct sock *sk, bool snd_una_advanced)
 	const u8 state = inet_csk(sk)->icsk_ca_state;
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if ((state < TCP_CA_Recovery && td_sacked_out(tp) >= tp->reordering) ||
+	if ((state < TCP_CA_Recovery && td_sacked_out(tp) >= td_reordering(tp)) ||
 	    (state == TCP_CA_Recovery && snd_una_advanced)) {
 		struct sk_buff *skb = tcp_rtx_queue_head(sk);
 		u32 mss;

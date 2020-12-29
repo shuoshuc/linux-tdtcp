@@ -458,6 +458,16 @@ struct tcp_sock {
 		u32	prr_delivered;
 		/* Total number of pkts sent during Recovery. */
 		u32	prr_out;
+		/* Total data packets delivered incl. rexmits */
+		u32	delivered;
+		/* number of undoable retransmissions. */
+		int	undo_retrans;
+		/* Total retransmits for entire subflow */
+		u32	total_retrans;
+		/* Timestamp of the last retransmit. */
+		u32	retrans_stamp;
+		/* Packet reordering length (default is 3, can change). */
+		u32	reordering;
 	} td_subf[16];
 #endif
 

@@ -29,7 +29,7 @@ static u32 tcp_clamp_rto_to_user_timeout(const struct sock *sk)
 	u32 elapsed, start_ts;
 	s32 remaining;
 
-	start_ts = tcp_sk(sk)->retrans_stamp;
+	start_ts = td_retrans_stamp(tcp_sk(sk));
 	if (!icsk->icsk_user_timeout)
 		return icsk->icsk_rto;
 	elapsed = tcp_time_stamp(tcp_sk(sk)) - start_ts;
@@ -197,7 +197,7 @@ static bool retransmits_timed_out(struct sock *sk,
 	if (!inet_csk(sk)->icsk_retransmits)
 		return false;
 
-	start_ts = tcp_sk(sk)->retrans_stamp;
+	start_ts = td_retrans_stamp(tcp_sk(sk));
 	if (likely(timeout == 0)) {
 		unsigned int rto_base = TCP_RTO_MIN;
 
@@ -416,8 +416,8 @@ static void tcp_fastopen_synack_timer(struct sock *sk, struct request_sock *req)
 	inet_rtx_syn_ack(sk, req);
 	req->num_timeout++;
 	icsk->icsk_retransmits++;
-	if (!tp->retrans_stamp)
-		tp->retrans_stamp = tcp_time_stamp(tp);
+	if (!td_retrans_stamp(tp))
+		set_retrans_stamp(tp, tcp_time_stamp(tp));
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 			  TCP_TIMEOUT_INIT << req->num_timeout, TCP_RTO_MAX);
 }

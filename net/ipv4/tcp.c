@@ -445,6 +445,9 @@ void tcp_init_sock(struct sock *sk)
 	tp->snd_cwnd_clamp = ~0;
 	tp->mss_cache = TCP_MSS_DEFAULT;
 
+	/* Note: we will hold off initializing subflow reordering until the handshake
+	 * happens later.
+	 */
 	tp->reordering = sock_net(sk)->ipv4.sysctl_tcp_reordering;
 	tcp_assign_congestion_control(sk);
 
@@ -2721,6 +2724,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 			tp->td_subf[tdn].snd_ssthresh = TCP_INFINITE_SSTHRESH;
 			tp->td_subf[tdn].snd_cwnd = TCP_INIT_CWND;
 			tp->td_subf[tdn].snd_cwnd_cnt = 0;
+			tp->td_subf[tdn].delivered = 0;
 		}
 	}
 	tp->window_clamp = 0;
@@ -2764,6 +2768,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 		     tdn++) {
 			tp->td_subf[tdn].retrans_out = 0;
 			tp->td_subf[tdn].sacked_out = 0;
+			tp->td_subf[tdn].total_retrans = 0;
 		}
 	}
 	tp->tlp_high_seq = 0;
@@ -3448,7 +3453,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	rate64 = (rate != ~0UL) ? rate : ~0ULL;
 	info->tcpi_max_pacing_rate = rate64;
 
-	info->tcpi_reordering = tp->reordering;
+	info->tcpi_reordering = td_reordering(tp);
 	info->tcpi_snd_cwnd = td_cwnd(tp);
 
 	if (info->tcpi_state == TCP_LISTEN) {
@@ -3511,7 +3516,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_rcv_rtt = tp->rcv_rtt_est.rtt_us >> 3;
 	info->tcpi_rcv_space = tp->rcvq_space.space;
 
-	info->tcpi_total_retrans = tp->total_retrans;
+	info->tcpi_total_retrans = td_total_retrans(tp);
 
 	info->tcpi_bytes_acked = tp->bytes_acked;
 	info->tcpi_bytes_received = tp->bytes_received;
@@ -3529,7 +3534,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	rate64 = tcp_compute_delivery_rate(tp);
 	if (rate64)
 		info->tcpi_delivery_rate = rate64;
-	info->tcpi_delivered = tp->delivered;
+	info->tcpi_delivered = td_delivered(tp);
 	info->tcpi_delivered_ce = tp->delivered_ce;
 	info->tcpi_bytes_sent = tp->bytes_sent;
 	info->tcpi_bytes_retrans = tp->bytes_retrans;
@@ -3594,7 +3599,7 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u64_64bit(stats, TCP_NLA_DATA_SEGS_OUT,
 			  tp->data_segs_out, TCP_NLA_PAD);
 	nla_put_u64_64bit(stats, TCP_NLA_TOTAL_RETRANS,
-			  tp->total_retrans, TCP_NLA_PAD);
+			  td_total_retrans(tp), TCP_NLA_PAD);
 
 	rate = READ_ONCE(sk->sk_pacing_rate);
 	rate64 = (rate != ~0UL) ? rate : ~0ULL;
@@ -3604,13 +3609,13 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u64_64bit(stats, TCP_NLA_DELIVERY_RATE, rate64, TCP_NLA_PAD);
 
 	nla_put_u32(stats, TCP_NLA_SND_CWND, td_cwnd(tp));
-	nla_put_u32(stats, TCP_NLA_REORDERING, tp->reordering);
+	nla_put_u32(stats, TCP_NLA_REORDERING, td_reordering(tp));
 	nla_put_u32(stats, TCP_NLA_MIN_RTT, tcp_min_rtt(tp));
 
 	nla_put_u8(stats, TCP_NLA_RECUR_RETRANS, inet_csk(sk)->icsk_retransmits);
 	nla_put_u8(stats, TCP_NLA_DELIVERY_RATE_APP_LMT, !!tp->rate_app_limited);
 	nla_put_u32(stats, TCP_NLA_SND_SSTHRESH, td_ssthresh(tp));
-	nla_put_u32(stats, TCP_NLA_DELIVERED, tp->delivered);
+	nla_put_u32(stats, TCP_NLA_DELIVERED, td_delivered(tp));
 	nla_put_u32(stats, TCP_NLA_DELIVERED_CE, tp->delivered_ce);
 
 	nla_put_u32(stats, TCP_NLA_SNDQ_SIZE, tp->write_seq - tp->snd_una);

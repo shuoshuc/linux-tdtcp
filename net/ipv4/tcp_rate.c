@@ -64,7 +64,7 @@ void tcp_rate_skb_sent(struct sock *sk, struct sk_buff *skb)
 
 	TCP_SKB_CB(skb)->tx.first_tx_mstamp	= tp->first_tx_mstamp;
 	TCP_SKB_CB(skb)->tx.delivered_mstamp	= tp->delivered_mstamp;
-	TCP_SKB_CB(skb)->tx.delivered		= tp->delivered;
+	TCP_SKB_CB(skb)->tx.delivered		= td_delivered(tp);
 	TCP_SKB_CB(skb)->tx.is_app_limited	= tp->app_limited ? 1 : 0;
 }
 
@@ -114,7 +114,7 @@ void tcp_rate_gen(struct sock *sk, u32 delivered, u32 lost,
 	u32 snd_us, ack_us;
 
 	/* Clear app limited if bubble is acked and gone. */
-	if (tp->app_limited && after(tp->delivered, tp->app_limited))
+	if (tp->app_limited && after(td_delivered(tp), tp->app_limited))
 		tp->app_limited = 0;
 
 	/* TODO: there are multiple places throughout tcp_ack() to get
@@ -136,7 +136,7 @@ void tcp_rate_gen(struct sock *sk, u32 delivered, u32 lost,
 		rs->interval_us = -1;
 		return;
 	}
-	rs->delivered   = tp->delivered - rs->prior_delivered;
+	rs->delivered   = td_delivered(tp) - rs->prior_delivered;
 
 	/* Model sending data and receiving ACKs as separate pipeline phases
 	 * for a window. Usually the ACK phase is longer, but with ACK
@@ -193,6 +193,6 @@ void tcp_rate_check_app_limited(struct sock *sk)
 	    /* All lost packets have been retransmitted. */
 	    td_lost_out(tp) <= td_retrans_out(tp))
 		tp->app_limited =
-			(tp->delivered + tcp_packets_in_flight(tp)) ? : 1;
+			(td_delivered(tp) + tcp_packets_in_flight(tp)) ? : 1;
 }
 EXPORT_SYMBOL_GPL(tcp_rate_check_app_limited);

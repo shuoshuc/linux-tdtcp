@@ -2237,7 +2237,7 @@ static int tcp_mtu_probe(struct sock *sk)
 	mss_now = tcp_current_mss(sk);
 	probe_size = tcp_mtu_to_mss(sk, (icsk->icsk_mtup.search_high +
 				    icsk->icsk_mtup.search_low) >> 1);
-	size_needed = probe_size + (tp->reordering + 1) * tp->mss_cache;
+	size_needed = probe_size + (td_reordering(tp) + 1) * tp->mss_cache;
 	interval = icsk->icsk_mtup.search_high - icsk->icsk_mtup.search_low;
 	/* When misfortune happens, we are reprobing actively,
 	 * and then reprobe timer has expired. We stick with current
@@ -3089,7 +3089,7 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	TCP_ADD_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS, segs);
 	if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_SYN)
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
-	tp->total_retrans += segs;
+	set_total_retrans(tp, td_total_retrans(tp) + segs);
 	tp->bytes_retrans += skb->len;
 
 	/* make sure skb->data is aligned on arches that require it
@@ -3151,12 +3151,12 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	}
 
 	/* Save stamp of the first (attempted) retransmit. */
-	if (!tp->retrans_stamp)
-		tp->retrans_stamp = tcp_skb_timestamp(skb);
+	if (!td_retrans_stamp(tp))
+		set_retrans_stamp(tp, tcp_skb_timestamp(skb));
 
-	if (tp->undo_retrans < 0)
-		tp->undo_retrans = 0;
-	tp->undo_retrans += tcp_skb_pcount(skb);
+	if (td_undo_retrans(tp) < 0)
+		set_undo_retrans(tp, 0);
+	set_undo_retrans(tp, td_undo_retrans(tp) + tcp_skb_pcount(skb));
 	return err;
 }
 
@@ -3735,7 +3735,7 @@ int tcp_connect(struct sock *sk)
 
 	tcp_init_nondata_skb(buff, tp->write_seq++, TCPHDR_SYN);
 	tcp_mstamp_refresh(tp);
-	tp->retrans_stamp = tcp_time_stamp(tp);
+	set_retrans_stamp(tp, tcp_time_stamp(tp));
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
@@ -3998,7 +3998,8 @@ int tcp_rtx_synack(const struct sock *sk, struct request_sock *req)
 		__TCP_INC_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS);
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
 		if (unlikely(tcp_passive_fastopen(sk)))
-			tcp_sk(sk)->total_retrans++;
+			set_total_retrans(tcp_sk(sk),
+					  td_total_retrans(tcp_sk(sk)) + 1);
 		trace_tcp_retransmit_synack(sk, req);
 	}
 	return res;
