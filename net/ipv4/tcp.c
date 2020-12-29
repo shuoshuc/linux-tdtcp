@@ -427,9 +427,6 @@ void tcp_init_sock(struct sock *sk)
 	 * algorithms that we must have the following bandaid to talk
 	 * efficiently to them.  -DaveM
 	 */
-	/* Note: we will hold off initializing subflow cwnd until the handshake
-	 * happens later.
-	 */
 	tp->snd_cwnd = TCP_INIT_CWND;
 
 	/* There's a bubble in the pipe until at least the first ACK. */
@@ -438,16 +435,10 @@ void tcp_init_sock(struct sock *sk)
 	/* See draft-stevens-tcpca-spec-01 for discussion of the
 	 * initialization of these values.
 	 */
-	/* Note: we will hold off initializing subflow ssthresh until the handshake
-	 * happens later.
-	 */
 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
 	tp->mss_cache = TCP_MSS_DEFAULT;
 
-	/* Note: we will hold off initializing subflow reordering until the handshake
-	 * happens later.
-	 */
 	tp->reordering = sock_net(sk)->ipv4.sysctl_tcp_reordering;
 	tcp_assign_congestion_control(sk);
 
@@ -464,6 +455,17 @@ void tcp_init_sock(struct sock *sk)
 
 	sk_sockets_allocated_inc(sk);
 	sk->sk_route_forced_caps = NETIF_F_GSO;
+
+#if IS_ENABLED(CONFIG_TDTCP)
+	int i;
+	for (i = 0;
+	     i < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
+	     i++) {
+		TD_CWND(tp, i) = TCP_INIT_CWND;
+		TD_SSTHRESH(tp, i) = TCP_INFINITE_SSTHRESH;
+		TD_REORDERING(tp, i) = sock_net(sk)->ipv4.sysctl_tcp_reordering;
+	}
+#endif
 }
 EXPORT_SYMBOL(tcp_init_sock);
 
