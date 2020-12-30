@@ -36,7 +36,10 @@
 #define TD_DA_FLG_D 0x02 /* packet contains TDTCP sub data seq only */
 #define TD_DA_FLG_B 0x04 /* packet contains both TDTCP sub data seq and ack */
 
-/* Macros to help shorten accessing td_subf members. */
+/* Macros to help shorten accessing inet_sock td_subf members. */
+#define TD_CA_STATE(icsk, tdn_id) (icsk)->td_subf[tdn_id].ca_state
+
+/* Macros to help shorten accessing tcp_sock td_subf members. */
 #define TD_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].snd_una
 #define TD_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_nxt
 #define TD_PREV_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_una
@@ -110,6 +113,27 @@ void tdtcp_write_options(__be32 *ptr, struct tdtcp_out_options *opts);
 void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 			 int opsize, int estab,
 			 struct tcp_options_received *opt_rx);
+
+/* Return ca_state of current TDN or the default variable value. */
+static inline u8 td_ca_state(const struct sock *sk)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_CA_STATE(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) :
+		inet_csk(sk)->icsk_ca_state;
+}
+
+/* Assign val to ca_state of current TDN or the default variable. */
+/* Note: icsk_ca_state is a bit field, we cannot use the same ptr dereference
+ * trick to compactly assign to different variables.
+ */
+static inline void set_ca_state(struct sock *sk, u8 val)
+{
+	if (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
+		TD_CA_STATE(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) = val;
+	} else {
+		inet_csk(sk)->icsk_ca_state = val;
+	}
+}
 
 /* Return the cwnd of current TDN or the default snd_cwnd. */
 static inline u32 td_cwnd(const struct tcp_sock *tp)

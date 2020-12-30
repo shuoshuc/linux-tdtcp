@@ -1147,7 +1147,7 @@ static inline void tcp_set_ca_state(struct sock *sk, const u8 ca_state)
 
 	if (icsk->icsk_ca_ops->set_state)
 		icsk->icsk_ca_ops->set_state(sk, ca_state);
-	icsk->icsk_ca_state = ca_state;
+	set_ca_state(sk, ca_state);
 }
 
 static inline void tcp_ca_event(struct sock *sk, const enum tcp_ca_event event)
@@ -1222,7 +1222,7 @@ static inline bool tcp_in_initial_slowstart(const struct tcp_sock *tp)
 static inline bool tcp_in_cwnd_reduction(const struct sock *sk)
 {
 	return (TCPF_CA_CWR | TCPF_CA_Recovery) &
-	       (1 << inet_csk(sk)->icsk_ca_state);
+	       (1 << td_ca_state(sk));
 }
 
 /* If cwnd > ssthresh, we may raise ssthresh to be half-way to cwnd.

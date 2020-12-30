@@ -399,7 +399,7 @@ void tcp_update_metrics(struct sock *sk)
 					       tp->snd_cwnd);
 		}
 	} else if (!tcp_in_slow_start(tp) &&
-		   icsk->icsk_ca_state == TCP_CA_Open) {
+		   td_ca_state(sk) == TCP_CA_Open) {
 		/* Cong. avoidance phase, cwnd is reliable. */
 		if (!net->ipv4.sysctl_tcp_no_ssthresh_metrics_save &&
 		    !tcp_metric_locked(tm, TCP_METRIC_SSTHRESH))

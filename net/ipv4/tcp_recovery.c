@@ -29,7 +29,7 @@ static u32 tcp_rack_reo_wnd(const struct sock *sk)
 		/* If reordering has not been observed, be aggressive during
 		 * the recovery or starting the recovery by DUPACK threshold.
 		 */
-		if (inet_csk(sk)->icsk_ca_state >= TCP_CA_Recovery)
+		if (td_ca_state(sk) >= TCP_CA_Recovery)
 			return 0;
 
 		if (td_sacked_out(tp) >= td_reordering(tp) &&
@@ -171,7 +171,7 @@ void tcp_rack_reo_timeout(struct sock *sk)
 	prior_inflight = tcp_packets_in_flight(tp);
 	tcp_rack_detect_loss(sk, &timeout);
 	if (prior_inflight != tcp_packets_in_flight(tp)) {
-		if (inet_csk(sk)->icsk_ca_state != TCP_CA_Recovery) {
+		if (td_ca_state(sk) != TCP_CA_Recovery) {
 			tcp_enter_recovery(sk, false);
 			if (!inet_csk(sk)->icsk_ca_ops->cong_control)
 				tcp_cwnd_reduction(sk, 1, 0);
@@ -230,7 +230,7 @@ void tcp_rack_update_reo_wnd(struct sock *sk, struct rate_sample *rs)
  */
 void tcp_newreno_mark_lost(struct sock *sk, bool snd_una_advanced)
 {
-	const u8 state = inet_csk(sk)->icsk_ca_state;
+	const u8 state = td_ca_state(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if ((state < TCP_CA_Recovery && td_sacked_out(tp) >= td_reordering(tp)) ||

@@ -3470,7 +3470,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 
 	slow = lock_sock_fast(sk);
 
-	info->tcpi_ca_state = icsk->icsk_ca_state;
+	info->tcpi_ca_state = td_ca_state(sk);
 	info->tcpi_retransmits = icsk->icsk_retransmits;
 	info->tcpi_probes = icsk->icsk_probes_out;
 	info->tcpi_backoff = icsk->icsk_backoff;
@@ -3621,7 +3621,7 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u32(stats, TCP_NLA_DELIVERED_CE, tp->delivered_ce);
 
 	nla_put_u32(stats, TCP_NLA_SNDQ_SIZE, tp->write_seq - tp->snd_una);
-	nla_put_u8(stats, TCP_NLA_CA_STATE, inet_csk(sk)->icsk_ca_state);
+	nla_put_u8(stats, TCP_NLA_CA_STATE, td_ca_state(sk));
 
 	nla_put_u64_64bit(stats, TCP_NLA_BYTES_SENT, tp->bytes_sent,
 			  TCP_NLA_PAD);

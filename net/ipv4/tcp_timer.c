@@ -504,14 +504,14 @@ void tcp_retransmit_timer(struct sock *sk)
 	if (icsk->icsk_retransmits == 0) {
 		int mib_idx = 0;
 
-		if (icsk->icsk_ca_state == TCP_CA_Recovery) {
+		if (td_ca_state(sk) == TCP_CA_Recovery) {
 			if (tcp_is_sack(tp))
 				mib_idx = LINUX_MIB_TCPSACKRECOVERYFAIL;
 			else
 				mib_idx = LINUX_MIB_TCPRENORECOVERYFAIL;
-		} else if (icsk->icsk_ca_state == TCP_CA_Loss) {
+		} else if (td_ca_state(sk) == TCP_CA_Loss) {
 			mib_idx = LINUX_MIB_TCPLOSSFAILURES;
-		} else if ((icsk->icsk_ca_state == TCP_CA_Disorder) ||
+		} else if ((td_ca_state(sk) == TCP_CA_Disorder) ||
 			   td_sacked_out(tp)) {
 			if (tcp_is_sack(tp))
 				mib_idx = LINUX_MIB_TCPSACKFAILURES;

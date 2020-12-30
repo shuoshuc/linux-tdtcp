@@ -163,7 +163,7 @@ void tcp_rate_gen(struct sock *sk, u32 delivered, u32 lost,
 		if (!rs->is_retrans)
 			pr_debug("tcp rate: %ld %d %u %u %u\n",
 				 rs->interval_us, rs->delivered,
-				 inet_csk(sk)->icsk_ca_state,
+				 td_ca_state(sk),
 				 tp->rx_opt.sack_ok, tcp_min_rtt(tp));
 		rs->interval_us = -1;
 		return;

@@ -2,7 +2,7 @@
 /*
  * NET		Generic infrastructure for INET connection oriented protocols.
  *
- *		Definitions for inet_connection_sock 
+ *		Definitions for inet_connection_sock
  *
  * Authors:	Many people, see the TCP sources
  *
@@ -25,6 +25,9 @@
 
 struct inet_bind_bucket;
 struct tcp_congestion_ops;
+
+/* Max number of TDNs supported. */
+#define MAX_NUM_TDNS 4
 
 /*
  * Pointers to address related TCP functions
@@ -136,6 +139,14 @@ struct inet_connection_sock {
 	u32			  icsk_user_timeout;
 
 	u64			  icsk_ca_priv[104 / sizeof(u64)];
+
+#if IS_ENABLED(CONFIG_TDTCP)
+	struct tdtcp_inet_subflow {
+		/* per TDN icsk_ca_state indexed by TDN ID. */
+		__u8	ca_state;
+	} td_subf[MAX_NUM_TDNS];
+#endif
+
 #define ICSK_CA_PRIV_SIZE      (13 * sizeof(u64))
 };
 

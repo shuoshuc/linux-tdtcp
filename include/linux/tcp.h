@@ -472,7 +472,7 @@ struct tcp_sock {
 		u32	high_seq;
 		/* snd_una upon a new recovery episode. */
 		u32	undo_marker;
-	} td_subf[16];
+	} td_subf[MAX_NUM_TDNS];
 #endif
 
 #ifdef CONFIG_TCP_MD5SIG

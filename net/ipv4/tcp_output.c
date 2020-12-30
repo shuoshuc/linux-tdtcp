@@ -1745,7 +1745,7 @@ static void tcp_cwnd_application_limited(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (inet_csk(sk)->icsk_ca_state == TCP_CA_Open &&
+	if (td_ca_state(sk) == TCP_CA_Open &&
 	    sk->sk_socket && !test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
 		/* Limited by application or receiver window. */
 		u32 init_win = tcp_init_cwnd(tp, __sk_dst_get(sk));
@@ -2064,7 +2064,7 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 	int win_divisor;
 	s64 delta;
 
-	if (icsk->icsk_ca_state >= TCP_CA_Recovery)
+	if (td_ca_state(sk) >= TCP_CA_Recovery)
 		goto send_now;
 
 	/* Avoid bursty behavior by allowing defer
@@ -2225,7 +2225,7 @@ static int tcp_mtu_probe(struct sock *sk)
 	 */
 	if (likely(!icsk->icsk_mtup.enabled ||
 		   icsk->icsk_mtup.probe_size ||
-		   inet_csk(sk)->icsk_ca_state != TCP_CA_Open ||
+		   td_ca_state(sk) != TCP_CA_Open ||
 		   td_cwnd(tp) < 11 ||
 		   tp->rx_opt.num_sacks || tp->rx_opt.dsack))
 		return -1;
@@ -2623,8 +2623,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	 */
 	if ((early_retrans != 3 && early_retrans != 4) ||
 	    !td_pkts_out(tp) || !tcp_is_sack(tp) ||
-	    (icsk->icsk_ca_state != TCP_CA_Open &&
-	     icsk->icsk_ca_state != TCP_CA_CWR))
+	    (td_ca_state(sk) != TCP_CA_Open &&
+	     td_ca_state(sk) != TCP_CA_CWR))
 		return false;
 
 	/* Probe timeout is 2*rtt. Add minimum RTO to account
@@ -3208,7 +3208,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 			continue;
 
 		} else {
-			if (icsk->icsk_ca_state != TCP_CA_Loss)
+			if (td_ca_state(sk) != TCP_CA_Loss)
 				mib_idx = LINUX_MIB_TCPFASTRETRANS;
 			else
 				mib_idx = LINUX_MIB_TCPSLOWSTARTRETRANS;
