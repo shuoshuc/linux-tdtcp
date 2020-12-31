@@ -3580,17 +3580,11 @@ static void tcp_connect_init(struct sock *sk)
 	tp->rcv_wup = tp->rcv_nxt;
 	WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
 
-#if IS_ENABLED(CONFIG_TDTCP)
 	/* If TDTCP is enabled in kernel config, then a new connection is by
 	 * default TDTCP.
 	 */
-	tp->is_tdtcp = true;
-	tp->num_tdns = TDTCP_NUM_TDNS;
-#else
-	/* Default value when TDTCP is disabled in kernel config. */
-	tp->is_tdtcp = false;
-	tp->num_tdns = 0;
-#endif
+	tp->is_tdtcp = IS_ENABLED(CONFIG_TDTCP);
+	tp->num_tdns = IS_ENABLED(CONFIG_TDTCP) ? TDTCP_NUM_TDNS : 0;
 	/* Assumes peer is not TDTCP capable until hearing from the peer. */
 	tp->rx_opt.tdtcp_ok = false;
 	tp->rx_opt.num_tdns = 0;
