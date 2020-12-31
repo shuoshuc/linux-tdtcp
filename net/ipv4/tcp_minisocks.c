@@ -253,7 +253,6 @@ EXPORT_SYMBOL(tcp_timewait_state_process);
  */
 void tcp_time_wait(struct sock *sk, int state, int timeo)
 {
-	const struct inet_connection_sock *icsk = inet_csk(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	struct inet_timewait_sock *tw;
 	struct inet_timewait_death_row *tcp_death_row = &sock_net(sk)->ipv4.tcp_death_row;
@@ -262,7 +261,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo)
 
 	if (tw) {
 		struct tcp_timewait_sock *tcptw = tcp_twsk((struct sock *)tw);
-		const int rto = (icsk->icsk_rto << 2) - (icsk->icsk_rto >> 1);
+		const int rto = (td_icsk_rto(sk) << 2) - (td_icsk_rto(sk) >> 1);
 		struct inet_sock *inet = inet_sk(sk);
 
 		tw->tw_transparent	= inet->transparent;
@@ -573,6 +572,12 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 				   div_u64(treq->snt_synack,
 					   USEC_PER_SEC / TCP_TS_HZ));
 			WRITE_ONCE(TD_UNDO_MARKER(newtp, i), treq->snt_isn);
+			/* icsk_retransmits needs to be initialized here after
+			 * inet_csk_clone_lock() because this is only needed
+			 * when is_tdtcp == true, which we will not find out
+			 * until now (after newtp is properly initialized).
+			 */
+			WRITE_ONCE(TD_ICSK_REXMITS(inet_csk(newsk), i), 0);
 		}
 	}
 

@@ -297,7 +297,7 @@ struct tcp_sock {
 	u32	snd_cwnd_cnt;	/* Linear increase counter		*/
 	u32	snd_cwnd_clamp; /* Do not allow snd_cwnd to grow above this */
 	u32	snd_cwnd_used;  /* cwnd used when network starves (not cwnd limited) */
-	u32	snd_cwnd_stamp;
+	u32	snd_cwnd_stamp; /* Timestamp for when cwnd is last validated. */
 	u32	prior_cwnd;	/* cwnd right before starting loss recovery */
 	u32	prr_delivered;	/* Number of newly delivered packets to
 				 * receiver in Recovery. */
@@ -440,6 +440,10 @@ struct tcp_sock {
 		u32	prior_ssthresh;
 		/* Linear increase counter */
 		u32	snd_cwnd_cnt;
+		/* Timestamp for when cwnd is last validated. */
+		u32	snd_cwnd_stamp;
+		/* cwnd used when network starves (not cwnd limited) */
+		u32	snd_cwnd_used;
 		u8	is_cwnd_limited:1, /* forward progress limited by cwnd? */
 			unused:7;
 		/* Packets which are "in flight" */

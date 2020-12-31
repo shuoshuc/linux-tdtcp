@@ -150,11 +150,11 @@ void tcp_cwnd_restart(struct sock *sk, s32 delta)
 	set_ssthresh(tp, tcp_current_ssthresh(sk));
 	restart_cwnd = min(restart_cwnd, cwnd);
 
-	while ((delta -= inet_csk(sk)->icsk_rto) > 0 && cwnd > restart_cwnd)
+	while ((delta -= td_icsk_rto(sk)) > 0 && cwnd > restart_cwnd)
 		cwnd >>= 1;
 	set_cwnd(tp, max(cwnd, restart_cwnd));
-	tp->snd_cwnd_stamp = tcp_jiffies32;
-	tp->snd_cwnd_used = 0;
+	set_cwnd_stamp(tp, tcp_jiffies32);
+	set_cwnd_used(tp, 0);
 }
 
 /* Congestion state accounting after a packet has been sent. */
@@ -1749,14 +1749,14 @@ static void tcp_cwnd_application_limited(struct sock *sk)
 	    sk->sk_socket && !test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
 		/* Limited by application or receiver window. */
 		u32 init_win = tcp_init_cwnd(tp, __sk_dst_get(sk));
-		u32 win_used = max(tp->snd_cwnd_used, init_win);
+		u32 win_used = max(td_cwnd_used(tp), init_win);
 		if (win_used < td_cwnd(tp)) {
 			set_ssthresh(tp, tcp_current_ssthresh(sk));
 			set_cwnd(tp, (td_cwnd(tp) + win_used) >> 1);
 		}
-		tp->snd_cwnd_used = 0;
+		set_cwnd_used(tp, 0);
 	}
-	tp->snd_cwnd_stamp = tcp_jiffies32;
+	set_cwnd_stamp(tp, tcp_jiffies32);
 }
 
 static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
@@ -1776,15 +1776,15 @@ static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 
 	if (tcp_is_cwnd_limited(sk)) {
 		/* Network is feed fully. */
-		tp->snd_cwnd_used = 0;
-		tp->snd_cwnd_stamp = tcp_jiffies32;
+		set_cwnd_used(tp, 0);
+		set_cwnd_stamp(tp, tcp_jiffies32);
 	} else {
 		/* Network starves. */
-		if (td_pkts_out(tp) > tp->snd_cwnd_used)
-			tp->snd_cwnd_used = td_pkts_out(tp);
+		if (td_pkts_out(tp) > td_cwnd_used(tp))
+			set_cwnd_used(tp, td_pkts_out(tp));
 
 		if (sock_net(sk)->ipv4.sysctl_tcp_slow_start_after_idle &&
-		    (s32)(tcp_jiffies32 - tp->snd_cwnd_stamp) >= inet_csk(sk)->icsk_rto &&
+		    (s32)(tcp_jiffies32 - td_cwnd_stamp(tp)) >= td_icsk_rto(sk) &&
 		    !ca_ops->cong_control)
 			tcp_cwnd_application_limited(sk);
 
@@ -2057,7 +2057,6 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 				 bool *is_rwnd_limited,
 				 u32 max_segs)
 {
-	const struct inet_connection_sock *icsk = inet_csk(sk);
 	u32 send_win, cong_win, limit, in_flight;
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *head;
@@ -2606,7 +2605,6 @@ repair:
 
 bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 {
-	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 timeout, rto_delta_us;
 	int early_retrans;
@@ -2643,7 +2641,7 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 
 	/* If the RTO formula yields an earlier time, then use that time. */
 	rto_delta_us = advancing_rto ?
-			jiffies_to_usecs(inet_csk(sk)->icsk_rto) :
+			jiffies_to_usecs(td_icsk_rto(sk)) :
 			tcp_rto_delta_us(sk);  /* How far in future is RTO? */
 	if (rto_delta_us > 0)
 		timeout = min_t(u32, timeout, usecs_to_jiffies(rto_delta_us));
@@ -3235,7 +3233,7 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	}
 	if (rearm_timer)
 		tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-				     inet_csk(sk)->icsk_rto,
+				     td_icsk_rto(sk),
 				     TCP_RTO_MAX);
 }
 
@@ -3598,8 +3596,8 @@ static void tcp_connect_init(struct sock *sk)
 	tp->rx_opt.num_tdns = 0;
 	tp->peer_num_tdns = 0;
 
-	inet_csk(sk)->icsk_rto = tcp_timeout_init(sk);
-	inet_csk(sk)->icsk_retransmits = 0;
+	set_icsk_rto(sk, tcp_timeout_init(sk));
+	set_icsk_rexmits(sk, 0);
 	tcp_clear_retrans(tp);
 }
 
@@ -3760,7 +3758,7 @@ int tcp_connect(struct sock *sk)
 
 	/* Timer for repeating the SYN until an answer. */
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-				  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
+				  td_icsk_rto(sk), TCP_RTO_MAX);
 	return 0;
 }
 EXPORT_SYMBOL(tcp_connect);

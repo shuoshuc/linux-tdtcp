@@ -411,6 +411,7 @@ void tcp_init_sock(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
+	int i;
 
 	tp->out_of_order_queue = RB_ROOT;
 	sk->tcp_rtx_queue = RB_ROOT;
@@ -457,10 +458,10 @@ void tcp_init_sock(struct sock *sk)
 	sk->sk_route_forced_caps = NETIF_F_GSO;
 
 #if IS_ENABLED(CONFIG_TDTCP)
-	int i;
 	for (i = 0;
 	     i < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
 	     i++) {
+		TD_ICSK_RTO(inet_csk(sk), i) = TCP_TIMEOUT_INIT;
 		TD_CWND(tp, i) = TCP_INIT_CWND;
 		TD_SSTHRESH(tp, i) = TCP_INFINITE_SSTHRESH;
 		TD_REORDERING(tp, i) = sock_net(sk)->ipv4.sysctl_tcp_reordering;
@@ -2723,10 +2724,11 @@ int tcp_disconnect(struct sock *sk, int flags)
 		for (tdn = 0;
 		     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
 		     tdn++) {
-			tp->td_subf[tdn].snd_ssthresh = TCP_INFINITE_SSTHRESH;
-			tp->td_subf[tdn].snd_cwnd = TCP_INIT_CWND;
-			tp->td_subf[tdn].snd_cwnd_cnt = 0;
-			tp->td_subf[tdn].delivered = 0;
+			TD_ICSK_RTO(icsk, tdn) = TCP_TIMEOUT_INIT;
+			TD_CWND(tp, tdn) = TCP_INIT_CWND;
+			TD_SSTHRESH(tp, tdn) = TCP_INFINITE_SSTHRESH;
+			TD_CWND_CNT(tp, tdn) = 0;
+			TD_DELIVERED(tp, tdn) = 0;
 		}
 	}
 	tp->window_clamp = 0;
@@ -2768,9 +2770,9 @@ int tcp_disconnect(struct sock *sk, int flags)
 		for (tdn = 0;
 		     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
 		     tdn++) {
-			tp->td_subf[tdn].retrans_out = 0;
-			tp->td_subf[tdn].sacked_out = 0;
-			tp->td_subf[tdn].total_retrans = 0;
+			TD_RETRANS_OUT(tp, tdn) = 0;
+			TD_SACKED_OUT(tp, tdn) = 0;
+			TD_TOTAL_RETRANS(tp, tdn) = 0;
 		}
 	}
 	tp->tlp_high_seq = 0;
@@ -3471,7 +3473,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	slow = lock_sock_fast(sk);
 
 	info->tcpi_ca_state = td_ca_state(sk);
-	info->tcpi_retransmits = icsk->icsk_retransmits;
+	info->tcpi_retransmits = td_icsk_rexmits(sk);
 	info->tcpi_probes = icsk->icsk_probes_out;
 	info->tcpi_backoff = icsk->icsk_backoff;
 
@@ -3492,7 +3494,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	if (tp->syn_data_acked)
 		info->tcpi_options |= TCPI_OPT_SYN_DATA;
 
-	info->tcpi_rto = jiffies_to_usecs(icsk->icsk_rto);
+	info->tcpi_rto = jiffies_to_usecs(td_icsk_rto(sk));
 	info->tcpi_ato = jiffies_to_usecs(icsk->icsk_ack.ato);
 	info->tcpi_snd_mss = tp->mss_cache;
 	info->tcpi_rcv_mss = icsk->icsk_ack.rcv_mss;
@@ -3614,7 +3616,7 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u32(stats, TCP_NLA_REORDERING, td_reordering(tp));
 	nla_put_u32(stats, TCP_NLA_MIN_RTT, tcp_min_rtt(tp));
 
-	nla_put_u8(stats, TCP_NLA_RECUR_RETRANS, inet_csk(sk)->icsk_retransmits);
+	nla_put_u8(stats, TCP_NLA_RECUR_RETRANS, td_icsk_rexmits(sk));
 	nla_put_u8(stats, TCP_NLA_DELIVERY_RATE_APP_LMT, !!tp->rate_app_limited);
 	nla_put_u32(stats, TCP_NLA_SND_SSTHRESH, td_ssthresh(tp));
 	nla_put_u32(stats, TCP_NLA_DELIVERED, td_delivered(tp));

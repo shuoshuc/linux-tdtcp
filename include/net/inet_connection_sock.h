@@ -144,6 +144,10 @@ struct inet_connection_sock {
 	struct tdtcp_inet_subflow {
 		/* per TDN icsk_ca_state indexed by TDN ID. */
 		__u8	ca_state;
+		/* Number of RTO counter. */
+		__u8	icsk_retransmits;
+		/* RTO value to be used by icsk_timeout */
+		__u32	icsk_rto;
 	} td_subf[MAX_NUM_TDNS];
 #endif
 
@@ -254,9 +258,9 @@ static inline void inet_csk_reset_xmit_timer(struct sock *sk, const int what,
 
 static inline unsigned long
 inet_csk_rto_backoff(const struct inet_connection_sock *icsk,
-		     unsigned long max_when)
+		     u32 rto, unsigned long max_when)
 {
-        u64 when = (u64)icsk->icsk_rto << icsk->icsk_backoff;
+        u64 when = (u64)rto << icsk->icsk_backoff;
 
         return (unsigned long)min_t(u64, when, max_when);
 }

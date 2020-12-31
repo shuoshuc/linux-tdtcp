@@ -504,7 +504,7 @@ reset:
 	if (crtt > tp->srtt_us) {
 		/* Set RTO like tcp_rtt_estimator(), but from cached RTT. */
 		crtt /= 8 * USEC_PER_SEC / HZ;
-		inet_csk(sk)->icsk_rto = crtt + max(2 * crtt, tcp_rto_min(sk));
+		set_icsk_rto(sk, crtt + max(2 * crtt, tcp_rto_min(sk)));
 	} else if (tp->srtt_us == 0) {
 		/* RFC6298: 5.7 We've failed to get a valid RTT sample from
 		 * 3WHS. This is most likely due to retransmission,
@@ -515,7 +515,7 @@ reset:
 		tp->rttvar_us = jiffies_to_usecs(TCP_TIMEOUT_FALLBACK);
 		tp->mdev_us = tp->mdev_max_us = tp->rttvar_us;
 
-		inet_csk(sk)->icsk_rto = TCP_TIMEOUT_FALLBACK;
+		set_icsk_rto(sk, TCP_TIMEOUT_FALLBACK);
 	}
 }
 

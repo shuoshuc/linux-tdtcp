@@ -666,8 +666,8 @@ void tcp_mtup_init(struct sock *sk);
 
 static inline void tcp_bound_rto(const struct sock *sk)
 {
-	if (inet_csk(sk)->icsk_rto > TCP_RTO_MAX)
-		inet_csk(sk)->icsk_rto = TCP_RTO_MAX;
+	if (td_icsk_rto(sk) > TCP_RTO_MAX)
+		set_icsk_rto(sk, TCP_RTO_MAX);
 }
 
 static inline u32 __tcp_set_rto(const struct tcp_sock *tp)
@@ -1323,7 +1323,7 @@ static inline void tcp_reset_xmit_timer(struct sock *sk,
  */
 static inline unsigned long tcp_probe0_base(const struct sock *sk)
 {
-	return max_t(unsigned long, inet_csk(sk)->icsk_rto, TCP_RTO_MIN);
+	return max_t(unsigned long, td_icsk_rto(sk), TCP_RTO_MIN);
 }
 
 /* Variant of inet_csk_rto_backoff() used for zero window probes */
@@ -1391,7 +1391,7 @@ static inline void tcp_slow_start_after_idle_check(struct sock *sk)
 	    ca_ops->cong_control)
 		return;
 	delta = tcp_jiffies32 - tp->lsndtime;
-	if (delta > inet_csk(sk)->icsk_rto)
+	if (delta > td_icsk_rto(sk))
 		tcp_cwnd_restart(sk, delta);
 }
 
@@ -1475,7 +1475,7 @@ static inline u32 keepalive_time_elapsed(const struct tcp_sock *tp)
 static inline int tcp_fin_time(const struct sock *sk)
 {
 	int fin_timeout = tcp_sk(sk)->linger2 ? : sock_net(sk)->ipv4.sysctl_tcp_fin_timeout;
-	const int rto = inet_csk(sk)->icsk_rto;
+	const int rto = td_icsk_rto(sk);
 
 	if (fin_timeout < (rto << 2) - (rto >> 1))
 		fin_timeout = (rto << 2) - (rto >> 1);
@@ -2076,7 +2076,7 @@ extern void tcp_rack_update_reo_wnd(struct sock *sk, struct rate_sample *rs);
 static inline s64 tcp_rto_delta_us(const struct sock *sk)
 {
 	const struct sk_buff *skb = tcp_rtx_queue_head(sk);
-	u32 rto = inet_csk(sk)->icsk_rto;
+	u32 rto = td_icsk_rto(sk);
 	u64 rto_time_stamp_us = tcp_skb_timestamp_us(skb) + jiffies_to_usecs(rto);
 
 	return rto_time_stamp_us - tcp_sk(sk)->tcp_mstamp;

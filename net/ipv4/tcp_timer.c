@@ -31,13 +31,13 @@ static u32 tcp_clamp_rto_to_user_timeout(const struct sock *sk)
 
 	start_ts = td_retrans_stamp(tcp_sk(sk));
 	if (!icsk->icsk_user_timeout)
-		return icsk->icsk_rto;
+		return td_icsk_rto(sk);
 	elapsed = tcp_time_stamp(tcp_sk(sk)) - start_ts;
 	remaining = icsk->icsk_user_timeout - elapsed;
 	if (remaining <= 0)
 		return 1; /* user timeout has passed; fire ASAP */
 
-	return min_t(u32, icsk->icsk_rto, msecs_to_jiffies(remaining));
+	return min_t(u32, td_icsk_rto(sk), msecs_to_jiffies(remaining));
 }
 
 /**
@@ -194,7 +194,7 @@ static bool retransmits_timed_out(struct sock *sk,
 {
 	unsigned int start_ts;
 
-	if (!inet_csk(sk)->icsk_retransmits)
+	if (!td_icsk_rexmits(sk))
 		return false;
 
 	start_ts = td_retrans_stamp(tcp_sk(sk));
@@ -219,7 +219,7 @@ static int tcp_write_timeout(struct sock *sk)
 	int retry_until;
 
 	if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV)) {
-		if (icsk->icsk_retransmits) {
+		if (td_icsk_rexmits(sk)) {
 			dst_negative_advice(sk);
 		} else {
 			sk_rethink_txhash(sk);
@@ -228,7 +228,7 @@ static int tcp_write_timeout(struct sock *sk)
 					LINUX_MIB_TCPTIMEOUTREHASH);
 		}
 		retry_until = icsk->icsk_syn_retries ? : net->ipv4.sysctl_tcp_syn_retries;
-		expired = icsk->icsk_retransmits >= retry_until;
+		expired = td_icsk_rexmits(sk) >= retry_until;
 	} else {
 		if (retransmits_timed_out(sk, net->ipv4.sysctl_tcp_retries1, 0)) {
 			/* Black hole detection */
@@ -244,7 +244,7 @@ static int tcp_write_timeout(struct sock *sk)
 
 		retry_until = net->ipv4.sysctl_tcp_retries2;
 		if (sock_flag(sk, SOCK_DEAD)) {
-			const bool alive = icsk->icsk_rto < TCP_RTO_MAX;
+			const bool alive = td_icsk_rto(sk) < TCP_RTO_MAX;
 
 			retry_until = tcp_orphan_retries(sk, alive);
 			do_reset = alive ||
@@ -261,8 +261,8 @@ static int tcp_write_timeout(struct sock *sk)
 
 	if (BPF_SOCK_OPS_TEST_FLAG(tp, BPF_SOCK_OPS_RTO_CB_FLAG))
 		tcp_call_bpf_3arg(sk, BPF_SOCK_OPS_RTO_CB,
-				  icsk->icsk_retransmits,
-				  icsk->icsk_rto, (int)expired);
+				  td_icsk_rexmits(sk),
+				  td_icsk_rto(sk), (int)expired);
 
 	if (expired) {
 		/* Has it gone just too far? */
@@ -293,7 +293,8 @@ void tcp_delack_timer_handler(struct sock *sk)
 	if (inet_csk_ack_scheduled(sk)) {
 		if (!inet_csk_in_pingpong_mode(sk)) {
 			/* Delayed ACK missed: inflate ATO. */
-			icsk->icsk_ack.ato = min(icsk->icsk_ack.ato << 1, icsk->icsk_rto);
+			icsk->icsk_ack.ato = min(icsk->icsk_ack.ato << 1,
+						 td_icsk_rto(sk));
 		} else {
 			/* Delayed ACK missed: leave pingpong mode and
 			 * deflate ATO.
@@ -371,7 +372,8 @@ static void tcp_probe_timer(struct sock *sk)
 
 	max_probes = sock_net(sk)->ipv4.sysctl_tcp_retries2;
 	if (sock_flag(sk, SOCK_DEAD)) {
-		const bool alive = inet_csk_rto_backoff(icsk, TCP_RTO_MAX) < TCP_RTO_MAX;
+		const bool alive = inet_csk_rto_backoff(icsk, td_icsk_rto(sk),
+							TCP_RTO_MAX) < TCP_RTO_MAX;
 
 		max_probes = tcp_orphan_retries(sk, alive);
 		if (!alive && icsk->icsk_backoff >= max_probes)
@@ -406,7 +408,7 @@ static void tcp_fastopen_synack_timer(struct sock *sk, struct request_sock *req)
 		return;
 	}
 	/* Lower cwnd after certain SYNACK timeout like tcp_init_transfer() */
-	if (icsk->icsk_retransmits == 1)
+	if (td_icsk_rexmits(sk) == 1)
 		tcp_enter_loss(sk);
 	/* XXX (TFO) - Unlike regular SYN-ACK retransmit, we ignore error
 	 * returned from rtx_syn_ack() to make it more persistent like
@@ -415,7 +417,7 @@ static void tcp_fastopen_synack_timer(struct sock *sk, struct request_sock *req)
 	 */
 	inet_rtx_syn_ack(sk, req);
 	req->num_timeout++;
-	icsk->icsk_retransmits++;
+	set_icsk_rexmits(sk, td_icsk_rexmits(sk) + 1);
 	if (!td_retrans_stamp(tp))
 		set_retrans_stamp(tp, tcp_time_stamp(tp));
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
@@ -501,7 +503,7 @@ void tcp_retransmit_timer(struct sock *sk)
 	if (tcp_write_timeout(sk))
 		goto out;
 
-	if (icsk->icsk_retransmits == 0) {
+	if (td_icsk_rexmits(sk) == 0) {
 		int mib_idx = 0;
 
 		if (td_ca_state(sk) == TCP_CA_Recovery) {
@@ -524,7 +526,7 @@ void tcp_retransmit_timer(struct sock *sk)
 
 	tcp_enter_loss(sk);
 
-	icsk->icsk_retransmits++;
+	set_icsk_rexmits(sk, td_icsk_rexmits(sk) + 1);
 	if (tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1) > 0) {
 		/* Retransmission failed because of local congestion,
 		 * Let senders fight for local resources conservatively.
@@ -565,12 +567,12 @@ out_reset_timer:
 	if (sk->sk_state == TCP_ESTABLISHED &&
 	    (tp->thin_lto || net->ipv4.sysctl_tcp_thin_linear_timeouts) &&
 	    tcp_stream_is_thin(tp) &&
-	    icsk->icsk_retransmits <= TCP_THIN_LINEAR_RETRIES) {
+	    td_icsk_rexmits(sk) <= TCP_THIN_LINEAR_RETRIES) {
 		icsk->icsk_backoff = 0;
-		icsk->icsk_rto = min(__tcp_set_rto(tp), TCP_RTO_MAX);
+		set_icsk_rto(sk, min(__tcp_set_rto(tp), TCP_RTO_MAX));
 	} else {
 		/* Use normal (exponential) backoff */
-		icsk->icsk_rto = min(icsk->icsk_rto << 1, TCP_RTO_MAX);
+		set_icsk_rto(sk, min(td_icsk_rto(sk) << 1, TCP_RTO_MAX));
 	}
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				  tcp_clamp_rto_to_user_timeout(sk), TCP_RTO_MAX);

@@ -855,6 +855,10 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 		atomic64_set(&newsk->sk_cookie,
 			     atomic64_read(&inet_rsk(req)->ir_cookie));
 
+		/* Note: initialization of td_subf[i].icsk_retransmits will be
+		 * deferred after caller of this function finishes initializing
+		 * tcp_sock (including tp->is_tdtcp).
+		 */
 		newicsk->icsk_retransmits = 0;
 		newicsk->icsk_backoff	  = 0;
 		newicsk->icsk_probes_out  = 0;

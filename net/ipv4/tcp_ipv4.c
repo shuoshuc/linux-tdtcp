@@ -416,7 +416,7 @@ void tcp_ld_RTO_revert(struct sock *sk, u32 seq)
 	if (sock_owned_by_user(sk))
 		return;
 
-	if (seq != tp->snd_una  || !icsk->icsk_retransmits ||
+	if (seq != tp->snd_una  || !td_icsk_rexmits(sk) ||
 	    !icsk->icsk_backoff)
 		return;
 
@@ -425,12 +425,12 @@ void tcp_ld_RTO_revert(struct sock *sk, u32 seq)
 		return;
 
 	icsk->icsk_backoff--;
-	icsk->icsk_rto = tp->srtt_us ? __tcp_set_rto(tp) : TCP_TIMEOUT_INIT;
-	icsk->icsk_rto = inet_csk_rto_backoff(icsk, TCP_RTO_MAX);
+	set_icsk_rto(sk, tp->srtt_us ? __tcp_set_rto(tp) : TCP_TIMEOUT_INIT);
+	set_icsk_rto(sk, inet_csk_rto_backoff(icsk, td_icsk_rto(sk), TCP_RTO_MAX));
 
 	tcp_mstamp_refresh(tp);
 	delta_us = (u32)(tp->tcp_mstamp - tcp_skb_timestamp_us(skb));
-	remaining = icsk->icsk_rto - usecs_to_jiffies(delta_us);
+	remaining = td_icsk_rto(sk) - usecs_to_jiffies(delta_us);
 
 	if (remaining > 0) {
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
@@ -2548,12 +2548,12 @@ static void get_tcp4_sock(struct sock *sk, struct seq_file *f, int i)
 		rx_queue,
 		timer_active,
 		jiffies_delta_to_clock_t(timer_expires - jiffies),
-		icsk->icsk_retransmits,
+		td_icsk_rexmits(sk),
 		from_kuid_munged(seq_user_ns(f), sock_i_uid(sk)),
 		icsk->icsk_probes_out,
 		sock_i_ino(sk),
 		refcount_read(&sk->sk_refcnt), sk,
-		jiffies_to_clock_t(icsk->icsk_rto),
+		jiffies_to_clock_t(td_icsk_rto(sk)),
 		jiffies_to_clock_t(icsk->icsk_ack.ato),
 		(icsk->icsk_ack.quick << 1) | inet_csk_in_pingpong_mode(sk),
 		td_cwnd(tp),

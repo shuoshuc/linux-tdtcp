@@ -573,7 +573,7 @@ void tcp_fastopen_active_disable_ofo_check(struct sock *sk)
 
 void tcp_fastopen_active_detect_blackhole(struct sock *sk, bool expired)
 {
-	u32 timeouts = inet_csk(sk)->icsk_retransmits;
+	u32 timeouts = td_icsk_rexmits(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	/* Broken middle-boxes may black-hole Fast Open connection during or

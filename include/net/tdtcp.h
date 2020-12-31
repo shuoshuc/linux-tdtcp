@@ -38,6 +38,8 @@
 
 /* Macros to help shorten accessing inet_sock td_subf members. */
 #define TD_CA_STATE(icsk, tdn_id) (icsk)->td_subf[tdn_id].ca_state
+#define TD_ICSK_REXMITS(icsk, tdn_id) (icsk)->td_subf[tdn_id].icsk_retransmits
+#define TD_ICSK_RTO(icsk, tdn_id) (icsk)->td_subf[tdn_id].icsk_rto
 
 /* Macros to help shorten accessing tcp_sock td_subf members. */
 #define TD_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].snd_una
@@ -50,6 +52,8 @@
 #define TD_PRIOR_SSTHRESH(tp, tdn_id) (tp)->td_subf[tdn_id].prior_ssthresh
 #define TD_CWND_LIMITED(tp, tdn_id) (tp)->td_subf[tdn_id].is_cwnd_limited
 #define TD_CWND_CNT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd_cnt
+#define TD_CWND_STAMP(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd_stamp
+#define TD_CWND_USED(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd_used
 #define TD_PKTS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].packets_out
 #define TD_RETRANS_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].retrans_out
 #define TD_LOST_OUT(tp, tdn_id) (tp)->td_subf[tdn_id].lost_out
@@ -133,6 +137,38 @@ static inline void set_ca_state(struct sock *sk, u8 val)
 	} else {
 		inet_csk(sk)->icsk_ca_state = val;
 	}
+}
+
+/* Return icsk_retransmits of current TDN or the default variable value. */
+static inline u8 td_icsk_rexmits(const struct sock *sk)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_ICSK_REXMITS(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) :
+		inet_csk(sk)->icsk_retransmits;
+}
+
+/* Assign val to icsk_retransmits of current TDN or the default variable. */
+static inline void set_icsk_rexmits(const struct sock *sk, u8 val)
+{
+	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_ICSK_REXMITS(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) :
+		&inet_csk(sk)->icsk_retransmits) = val;
+}
+
+/* Return icsk_rto of current TDN or the default variable value. */
+static inline u32 td_icsk_rto(const struct sock *sk)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_ICSK_RTO(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) :
+		inet_csk(sk)->icsk_rto;
+}
+
+/* Assign val to icsk_rto of current TDN or the default variable. */
+static inline void set_icsk_rto(const struct sock *sk, u32 val)
+{
+	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_ICSK_RTO(inet_csk(sk), tcp_sk(sk)->curr_tdn_id) :
+		&inet_csk(sk)->icsk_rto) = val;
 }
 
 /* Return the cwnd of current TDN or the default snd_cwnd. */
@@ -293,6 +329,34 @@ static inline void set_cwnd_cnt(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_CWND_CNT(tp, tp->curr_tdn_id) : &tp->snd_cwnd_cnt) = val;
+}
+
+/* Return snd_cnwd_stamp of current TDN or the default variable value. */
+static inline u32 td_cwnd_stamp(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_CWND_STAMP(tp, tp->curr_tdn_id) : tp->snd_cwnd_stamp;
+}
+
+/* Assign val to snd_cwnd_stamp of current TDN or the default variable. */
+static inline void set_cwnd_stamp(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_CWND_STAMP(tp, tp->curr_tdn_id) : &tp->snd_cwnd_stamp) = val;
+}
+
+/* Return snd_cnwd_used of current TDN or the default variable value. */
+static inline u32 td_cwnd_used(const struct tcp_sock *tp)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_CWND_USED(tp, tp->curr_tdn_id) : tp->snd_cwnd_used;
+}
+
+/* Assign val to snd_cwnd_used of current TDN or the default variable. */
+static inline void set_cwnd_used(struct tcp_sock *tp, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_CWND_USED(tp, tp->curr_tdn_id) : &tp->snd_cwnd_used) = val;
 }
 
 /* Return retrans_out of current TDN or the default variable value. */
