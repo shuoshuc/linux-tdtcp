@@ -3515,6 +3515,7 @@ static void tcp_connect_init(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	__u8 rcv_wscale;
 	u32 rcv_wnd;
+	int i;
 
 	/* We'll fix this up when we get a response from the other end.
 	 * See tcp_input.c:tcp_rcv_state_process case TCP_SYN_SENT.
@@ -3590,8 +3591,14 @@ static void tcp_connect_init(struct sock *sk)
 	tp->rx_opt.num_tdns = 0;
 	tp->peer_num_tdns = 0;
 
-	set_icsk_rto(sk, tcp_timeout_init(sk));
-	set_icsk_rexmits(sk, 0);
+	inet_csk(sk)->icsk_rto = tcp_timeout_init(sk);
+	inet_csk(sk)->icsk_retransmits = 0;
+#if IS_ENABLED(CONFIG_TDTCP)
+	for (i = 0; i < MAX_NUM_TDNS; i++) {
+		TD_ICSK_RTO(inet_csk(sk), i) = tcp_timeout_init(sk);
+		TD_ICSK_REXMITS(inet_csk(sk), i) = 0;
+	}
+#endif
 	tcp_clear_retrans(tp);
 }
 
