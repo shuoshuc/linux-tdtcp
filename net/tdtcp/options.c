@@ -50,9 +50,8 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 			       struct tdtcp_out_options *opts)
 {
 	bool ret = false;
-	struct tcp_sock *tp;
+	struct tcp_sock *tp = tcp_sk(sk);
 	u8 flags = 0;
-	tp = tcp_sk(sk);
 
 	/* If skb is null, that indicates caller is just trying to estimate the
 	 * option header length but not really constructing the packet. Very
@@ -157,5 +156,16 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 		}
 		pr_debug("TDTCP subtype=TDC_(SYN|SYNACK), peer tdtcp_ok=%u, "
 			 "num_tdns=%u.", opt_rx->tdtcp_ok, opt_rx->num_tdns);
+	}
+}
+
+void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk)
+{
+	if (sk_is_tdtcp(sk)) {
+		TCP_SKB_CB(skb)->tdtcp_flags = TD_DA_FLG_D;
+		TCP_SKB_CB(skb)->data_tdn_id = tcp_sk(sk)->curr_tdn_id;
+		/* TODO: update other fields for a subflow? e.g.,
+		 * sub_write_seq
+		 */
 	}
 }

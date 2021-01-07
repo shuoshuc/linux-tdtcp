@@ -1388,23 +1388,6 @@ new_segment:
 		TCP_SKB_CB(skb)->end_seq += copy;
 		tcp_skb_pcount_set(skb, 0);
 
-		/* Populate curr_tdn_id for an egress SKB. If this is not a
-		 * newly allocated SKB, we are effectively overwriting the flag
-		 * and TDN ID, since the fields should reflect the most recent
-		 * state of the SKB and network.
-		 *
-		 * We do not yet support TD_DA_FLG_B mode so flag can only be
-		 * TD_DA_FLG_D.
-		 */
-		if (sk_is_tdtcp(sk)) {
-			u8 tdn_id = READ_ONCE(tp->curr_tdn_id);
-			TCP_SKB_CB(skb)->tdtcp_flags = TD_DA_FLG_D;
-			TCP_SKB_CB(skb)->data_tdn_id = tdn_id;
-			/* TODO: update other fields for a subflow? e.g.,
-			 * sub_write_seq
-			 */
-		}
-
 		copied += copy;
 		if (!msg_data_left(msg)) {
 			if (unlikely(flags & MSG_EOR))

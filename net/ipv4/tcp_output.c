@@ -2568,6 +2568,15 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		if (TCP_SKB_CB(skb)->end_seq == TCP_SKB_CB(skb)->seq)
 			break;
 
+		/* Populate curr_tdn_id and TDTCP suboption flag for an egress
+		 * SKB. If this is not a newly allocated SKB, we are effectively
+		 * overwriting the flag and TDN ID, since the fields should
+		 * reflect the most recent state of the SKB and network.
+		 *
+		 * We do not yet support TD_DA_FLG_B mode so flag can only be
+		 * TD_DA_FLG_D.
+		 */
+		tdtcp_set_skb_tdda(skb, sk);
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
 

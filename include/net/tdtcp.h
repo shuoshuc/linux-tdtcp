@@ -118,6 +118,9 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 			 int opsize, int estab,
 			 struct tcp_options_received *opt_rx);
 
+/* Populates SKB CB with TDDA FLG_D metadata. */
+void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk);
+
 /* Return ca_state of current TDN or the default variable value. */
 static inline u8 td_ca_state(const struct sock *sk)
 {
