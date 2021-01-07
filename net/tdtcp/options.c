@@ -50,7 +50,6 @@ bool tdtcp_established_options(struct sock *sk, struct sk_buff *skb,
 			       struct tdtcp_out_options *opts)
 {
 	bool ret = false;
-	struct tcp_sock *tp = tcp_sk(sk);
 	u8 flags = 0;
 
 	/* If skb is null, that indicates caller is just trying to estimate the
@@ -159,11 +158,17 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 	}
 }
 
-void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk)
+void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk,
+			u8 flags)
 {
 	if (sk_is_tdtcp(sk)) {
-		TCP_SKB_CB(skb)->tdtcp_flags = TD_DA_FLG_D;
-		TCP_SKB_CB(skb)->data_tdn_id = tcp_sk(sk)->curr_tdn_id;
+		TCP_SKB_CB(skb)->tdtcp_flags = flags;
+		if (flags & (TD_DA_FLG_B | TD_DA_FLG_D)) {
+			TCP_SKB_CB(skb)->data_tdn_id = tcp_sk(sk)->curr_tdn_id;
+		}
+		if (flags & (TD_DA_FLG_B | TD_DA_FLG_A)) {
+			TCP_SKB_CB(skb)->ack_tdn_id = tcp_sk(sk)->curr_tdn_id;
+		}
 		/* TODO: update other fields for a subflow? e.g.,
 		 * sub_write_seq
 		 */

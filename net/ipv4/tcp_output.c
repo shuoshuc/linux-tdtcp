@@ -2576,7 +2576,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		 * We do not yet support TD_DA_FLG_B mode so flag can only be
 		 * TD_DA_FLG_D.
 		 */
-		tdtcp_set_skb_tdda(skb, sk);
+		tdtcp_set_skb_tdda(skb, sk, TD_DA_FLG_D);
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
 
@@ -3862,6 +3862,9 @@ void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
 	 * SKB_TRUESIZE(max(1 .. 66, MAX_TCP_HEADER)) is unfortunately ~784
 	 */
 	skb_set_tcp_pure_ack(buff);
+
+	/* We do not yet support TD_DA_FLG_B mode, so this is a pure ACK. */
+	tdtcp_set_skb_tdda(buff, sk, TD_DA_FLG_A);
 
 	/* Send it off, this clears delayed acks for us. */
 	__tcp_transmit_skb(sk, buff, 0, (__force gfp_t)0, rcv_nxt);
