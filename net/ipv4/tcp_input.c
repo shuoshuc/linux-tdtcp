@@ -6700,15 +6700,11 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	tcp_rsk(req)->is_mptcp = 0;
 #endif
 
-#if IS_ENABLED(CONFIG_TDTCP)
-	/* Init the connection as TDTCP until peer option header says otherwise. */
-	tcp_rsk(req)->is_tdtcp = true;
-	tcp_rsk(req)->num_tdns = TDTCP_NUM_TDNS;
-#else
-	/* Default value when TDTCP is disabled in kernel config. */
-	tcp_rsk(req)->is_tdtcp = false;
-	tcp_rsk(req)->num_tdns = 0;
-#endif
+	/* If TDTCP is enabled in kernel config, then a new connection is by
+	 * default TDTCP.
+	 */
+	tcp_rsk(req)->is_tdtcp = IS_ENABLED(CONFIG_TDTCP);
+	tcp_rsk(req)->num_tdns = IS_ENABLED(CONFIG_TDTCP) ? TDTCP_NUM_TDNS : 0;
 	/* Assume peer is not TDTCP capable until actually hearing from it. */
 	tcp_rsk(req)->peer_num_tdns = 0;
 
