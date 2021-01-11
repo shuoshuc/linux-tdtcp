@@ -2520,6 +2520,14 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		BUG_ON(!tso_segs);
 
 		cwnd_quota = tcp_cwnd_test(tp, skb);
+		if (sk_is_tdtcp(sk)) {
+			pr_debug("tcp_write_xmit(): sk=%p, TDN=%d, SKB.seq=%u, "
+				 "SKB.end_seq=%u, snd_cwnd=%u, cwnd_quota=%u, "
+				 "snd_una=%u, snd_wnd=%u, snd_nxt=%u.",
+				 sk, tp->curr_tdn_id, TCP_SKB_CB(skb)->seq,
+				 TCP_SKB_CB(skb)->end_seq, td_cwnd(tp),
+				 cwnd_quota, tp->snd_una, tp->snd_wnd, tp->snd_nxt);
+		}
 		if (!cwnd_quota) {
 			if (push_one == 2)
 				/* Force out a loss probe pkt. */

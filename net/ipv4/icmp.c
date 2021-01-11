@@ -1079,6 +1079,9 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					 " new curr_tdn_id=%u, num_tdns=%u on "
 					 "sk=%p.", tdn_id, tp->num_tdns, sk);
 			} else {
+				pr_debug("icmp_active_tdn_id(): sk=%p, curr_tdn=%u, snd_una=%u, "
+					 "snd_nxt=%u, snd_cwnd=%u, snd_wnd=%u.", sk, tp->curr_tdn_id,
+					 tp->snd_una, tp->snd_nxt, td_cwnd(tp), tp->snd_wnd);
 				curr_tdn_id = READ_ONCE(tp->curr_tdn_id);
 				/* If prev_snd_una != prev_snd_nxt, that means
 				 * tdn_id's window from 2 cycles ago is still
@@ -1105,10 +1108,10 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				 * snd_nxt of tdn_id (the previous window) over
 				 * to prev_snd_una and prev_snd_nxt.
 				 */
-				TD_PREV_UNA(tp, tdn_id) = TD_UNA(tp, tdn_id);
-				TD_PREV_NXT(tp, tdn_id) = TD_NXT(tp, tdn_id);
-				TD_UNA(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
-				TD_NXT(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
+				// TD_PREV_UNA(tp, tdn_id) = TD_UNA(tp, tdn_id);
+				// TD_PREV_NXT(tp, tdn_id) = TD_NXT(tp, tdn_id);
+				// TD_UNA(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
+				// TD_NXT(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
 
 				WRITE_ONCE(tp->curr_tdn_id, tdn_id);
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
