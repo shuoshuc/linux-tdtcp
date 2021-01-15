@@ -244,11 +244,25 @@ static inline u32 td_pkts_out(const struct tcp_sock *tp)
 		TD_PKTS_OUT(tp, tp->curr_tdn_id) : tp->packets_out;
 }
 
+/* Return packets_out of given TDN or the default variable value. */
+static inline u32 td_get_pkts_out(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PKTS_OUT(tp, tdn_id) : tp->packets_out;
+}
+
 /* Assign val to packets_out of current TDN or the default variable. */
 static inline void set_pkts_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PKTS_OUT(tp, tp->curr_tdn_id) : &tp->packets_out) = val;
+}
+
+/* Assign val to packets_out of given TDN or the default variable. */
+static inline void td_set_pkts_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_PKTS_OUT(tp, tdn_id) : &tp->packets_out) = val;
 }
 
 /* Return snd_una of current TDN or the default variable value. */

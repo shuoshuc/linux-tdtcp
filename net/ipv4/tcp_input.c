@@ -3075,6 +3075,8 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 	u32 last_in_flight = 0;
 	bool rtt_update;
 	int flag = 0;
+	/* If failing to get data_tdn_id from SKB, fallback to curr_tdn_id. */
+	u8 skb_tdn = tp->curr_tdn_id;
 
 	first_ackt = 0;
 
@@ -3083,6 +3085,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 		const u32 start_seq = scb->seq;
 		u8 sacked = scb->sacked;
 		u32 acked_pcount;
+		skb_tdn = scb->data_tdn_id;
 
 		tcp_ack_tstamp(sk, skb, prior_snd_una);
 
@@ -3129,7 +3132,9 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 		if (sacked & TCPCB_LOST)
 			set_lost_out(tp, td_lost_out(tp) - acked_pcount);
 
-		set_pkts_out(tp, td_pkts_out(tp) - acked_pcount);
+		/* ACKed SKBs should be credited to SKB->data_tdn_id. */
+		td_set_pkts_out(tp, skb_tdn,
+				td_get_pkts_out(tp, skb_tdn) - acked_pcount);
 		pkts_acked += acked_pcount;
 		tcp_rate_skb_delivered(sk, skb, sack->rate);
 
