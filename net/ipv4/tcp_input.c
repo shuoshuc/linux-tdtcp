@@ -139,6 +139,8 @@ void clean_acked_data_flush(void)
 EXPORT_SYMBOL_GPL(clean_acked_data_flush);
 #endif
 
+static struct sk_buff *tcp_sacktag_bsearch(struct sock *sk, u32 seq);
+
 static void tcp_gro_dev_warn(struct sock *sk, const struct sk_buff *skb,
 			     unsigned int len)
 {
@@ -1097,12 +1099,14 @@ static bool tcp_is_sackblock_valid(struct tcp_sock *tp, bool is_dsack,
 
 static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 			    struct tcp_sack_block_wire *sp, int num_sacks,
-			    u32 prior_snd_una)
+			    u32 prior_snd_una, struct sk_buff **sack0_skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 start_seq_0 = get_unaligned_be32(&sp[0].start_seq);
 	u32 end_seq_0 = get_unaligned_be32(&sp[0].end_seq);
 	bool dup_sack = false;
+	struct sk_buff *dsack_skb;
+	u8 skb_tdn;
 
 	if (before(start_seq_0, TCP_SKB_CB(ack_skb)->ack_seq)) {
 		dup_sack = true;
@@ -1121,11 +1125,38 @@ static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 		}
 	}
 
+	/* Given the DSACK block, look for the corresponding SKB in rtx_queue.
+	 * If for any reason, search using the left edge returns nothing, try
+	 * right edge as fallback. If SKB is found, its data_tdn_id is what we
+	 * need to correctly update undo_retrans.
+	 */
+	if (dup_sack) {
+		dsack_skb = tcp_sacktag_bsearch(sk, start_seq_0);
+		if (!dsack_skb) {
+			dsack_skb = tcp_sacktag_bsearch(sk, end_seq_0);
+		}
+		if (dsack_skb) {
+			skb_tdn = TCP_SKB_CB(dsack_skb)->data_tdn_id;
+		}
+	}
 	/* D-SACK for already forgotten data... Do dumb counting. */
-	if (dup_sack && td_undo_marker(tp) && td_undo_retrans(tp) > 0 &&
+	/* In TDTCP, DSACK should decrement undo_retrans of the corresponding
+	 * SKB being DSACKed, not the current TDN. If the SKB cannot be found,
+	 * and we have no idea what the correct TDN is, just skip.
+	 */
+	if (dup_sack && dsack_skb && td_get_undo_marker(tp, skb_tdn) &&
+	    td_get_undo_retrans(tp, skb_tdn) > 0 &&
 	    !after(end_seq_0, prior_snd_una) &&
-	    after(end_seq_0, td_undo_marker(tp)))
-		set_undo_retrans(tp, td_undo_retrans(tp) - 1);
+	    after(end_seq_0, td_get_undo_marker(tp, skb_tdn))) {
+		td_set_undo_retrans(tp, skb_tdn,
+				    td_get_undo_retrans(tp, skb_tdn) - 1);
+		/* The caller will later increment `delivered` given that a
+		 * DSACK is confirmed. That would also need to be done on the
+		 * corresponding TDN. To save one extra tree walk of the
+		 * rtx_queue, we just pass the SKB we have found back.
+		 */
+		*sack0_skb = dsack_skb;
+	}
 
 	return dup_sack;
 }
@@ -1204,15 +1235,17 @@ static u8 tcp_sacktag_one(struct sock *sk,
 			  struct tcp_sacktag_state *state, u8 sacked,
 			  u32 start_seq, u32 end_seq,
 			  int dup_sack, int pcount,
-			  u64 xmit_time)
+			  u64 xmit_time, u8 skb_tdn)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	/* Account D-SACK for retransmitted packet. */
 	if (dup_sack && (sacked & TCPCB_RETRANS)) {
-		if (td_undo_marker(tp) && td_undo_retrans(tp) > 0 &&
-		    after(end_seq, td_undo_marker(tp)))
-			set_undo_retrans(tp, td_undo_retrans(tp) - 1);
+		if (td_get_undo_marker(tp, skb_tdn) &&
+		    td_get_undo_retrans(tp, skb_tdn) > 0 &&
+		    after(end_seq, td_get_undo_marker(tp, skb_tdn)))
+			td_set_undo_retrans(tp, skb_tdn,
+					    td_get_undo_retrans(tp, skb_tdn) - 1);
 		if ((sacked & TCPCB_SACKED_ACKED) &&
 		    before(start_seq, state->reord))
 				state->reord = start_seq;
@@ -1232,8 +1265,10 @@ static u8 tcp_sacktag_one(struct sock *sk,
 			 */
 			if (sacked & TCPCB_LOST) {
 				sacked &= ~(TCPCB_LOST|TCPCB_SACKED_RETRANS);
-				set_lost_out(tp, td_lost_out(tp) - pcount);
-				set_retrans_out(tp, td_retrans_out(tp) - pcount);
+				td_set_lost_out(tp, skb_tdn,
+					td_get_lost_out(tp, skb_tdn) - pcount);
+				td_set_retrans_out(tp, skb_tdn,
+					td_get_retrans_out(tp, skb_tdn) - pcount);
 			}
 		} else {
 			if (!(sacked & TCPCB_RETRANS)) {
@@ -1245,7 +1280,7 @@ static u8 tcp_sacktag_one(struct sock *sk,
 				    before(start_seq, state->reord))
 					state->reord = start_seq;
 
-				if (!after(end_seq, td_high_seq(tp)))
+				if (!after(end_seq, td_get_high_seq(tp, skb_tdn)))
 					state->flag |= FLAG_ORIG_SACK_ACKED;
 				if (state->first_sackt == 0)
 					state->first_sackt = xmit_time;
@@ -1254,15 +1289,18 @@ static u8 tcp_sacktag_one(struct sock *sk,
 
 			if (sacked & TCPCB_LOST) {
 				sacked &= ~TCPCB_LOST;
-				set_lost_out(tp, td_lost_out(tp) - pcount);
+				td_set_lost_out(tp, skb_tdn,
+					td_get_lost_out(tp, skb_tdn) - pcount);
 			}
 		}
 
 		sacked |= TCPCB_SACKED_ACKED;
 		state->flag |= FLAG_DATA_SACKED;
-		set_sacked_out(tp, td_sacked_out(tp) + pcount);
+		td_set_sacked_out(tp, skb_tdn,
+				  td_get_sacked_out(tp, skb_tdn) + pcount);
 		/* Out-of-order packets delivered */
-		set_delivered(tp, td_delivered(tp) + pcount);
+		td_set_delivered(tp, skb_tdn,
+				 td_get_delivered(tp, skb_tdn) + pcount);
 
 		/* Lost marker hint past SACKed? Tweak RFC3517 cnt */
 		if (tp->lost_skb_hint &&
@@ -1276,7 +1314,8 @@ static u8 tcp_sacktag_one(struct sock *sk,
 	 */
 	if (dup_sack && (sacked & TCPCB_SACKED_RETRANS)) {
 		sacked &= ~TCPCB_SACKED_RETRANS;
-		set_retrans_out(tp, td_retrans_out(tp) - pcount);
+		td_set_retrans_out(tp, skb_tdn,
+				   td_get_retrans_out(tp, skb_tdn) - pcount);
 	}
 
 	return sacked;
@@ -1305,7 +1344,7 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	 */
 	tcp_sacktag_one(sk, state, TCP_SKB_CB(skb)->sacked,
 			start_seq, end_seq, dup_sack, pcount,
-			tcp_skb_timestamp_us(skb));
+			tcp_skb_timestamp_us(skb), TCP_SKB_CB(skb)->data_tdn_id);
 	tcp_rate_skb_delivered(sk, skb, state->rate);
 
 	if (skb == tp->lost_skb_hint)
@@ -1594,7 +1633,8 @@ static struct sk_buff *tcp_sacktag_walk(struct sk_buff *skb, struct sock *sk,
 						TCP_SKB_CB(skb)->end_seq,
 						dup_sack,
 						tcp_skb_pcount(skb),
-						tcp_skb_timestamp_us(skb));
+						tcp_skb_timestamp_us(skb),
+						TCP_SKB_CB(skb)->data_tdn_id);
 			tcp_rate_skb_delivered(sk, skb, state->rate);
 			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
 				list_del_init(&skb->tcp_tsorted_anchor);
@@ -1671,12 +1711,13 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 	struct tcp_sack_block_wire *sp_wire = (struct tcp_sack_block_wire *)(ptr+2);
 	struct tcp_sack_block sp[TCP_NUM_SACKS];
 	struct tcp_sack_block *cache;
-	struct sk_buff *skb;
+	struct sk_buff *skb, *sack0_skb;
 	int num_sacks = min(TCP_NUM_SACKS, (ptr[1] - TCPOLEN_SACK_BASE) >> 3);
 	int used_sacks;
 	bool found_dup_sack = false;
 	int i, j;
 	int first_sack_index;
+	u8 skb_tdn;
 
 	state->flag = 0;
 	state->reord = tp->snd_nxt;
@@ -1685,11 +1726,25 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 		tcp_highest_sack_reset(sk);
 
 	found_dup_sack = tcp_check_dsack(sk, ack_skb, sp_wire,
-					 num_sacks, prior_snd_una);
+					 num_sacks, prior_snd_una, &sack0_skb);
 	if (found_dup_sack) {
 		state->flag |= FLAG_DSACKING_ACK;
-		/* A spurious retransmission is delivered */
-		set_delivered(tp, td_delivered(tp) + 1);
+		/* A DSACK means a dup packet has left network, hence increment
+		 * `delivered` by 1. In TDTCP, this should be credited to the
+		 * TDN which the packet belongs to. So we retrieve the SKB via
+		 * a tree walk of rtx_queue, which tcp_check_dsack() kindly does
+		 * for us. sack0_skb points to the SKB we are looking for, it is
+		 * the SKB that SACK block 0 is SACKing (SACK[0] is DSACK when
+		 * found_dup_sack == true). If SKB is not found (e.g., already
+		 * been removed), we should just skip and not try to incorrectly
+		 * credit to the current TDN.
+		 */
+		if (sack0_skb) {
+			skb_tdn = TCP_SKB_CB(sack0_skb)->data_tdn_id;
+			/* A spurious retransmission is delivered */
+			td_set_delivered(tp, skb_tdn,
+					 td_get_delivered(tp, skb_tdn) + 1);
+		}
 	}
 
 	/* Eliminate too old ACKs, but take into
@@ -3105,8 +3160,12 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 
 		if (unlikely(sacked & TCPCB_RETRANS)) {
 			if (sacked & TCPCB_SACKED_RETRANS)
-				set_retrans_out(tp, td_retrans_out(tp) -
-						acked_pcount);
+				/* TODO: Tx and Retx skb might not take the same
+				 * TDN path, hence need to distinguish what one
+				 * is ACK acking, and credit accordingly.
+				 */
+				td_set_retrans_out(tp, skb_tdn,
+					td_get_retrans_out(tp, skb_tdn) - acked_pcount);
 			flag |= FLAG_RETRANS_DATA_ACKED;
 		} else if (!(sacked & TCPCB_SACKED_ACKED)) {
 			last_ackt = tcp_skb_timestamp_us(skb);
@@ -3122,15 +3181,18 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 		}
 
 		if (sacked & TCPCB_SACKED_ACKED) {
-			set_sacked_out(tp, td_sacked_out(tp) - acked_pcount);
+			td_set_sacked_out(tp, skb_tdn,
+				td_get_sacked_out(tp, skb_tdn) - acked_pcount);
 		} else if (tcp_is_sack(tp)) {
-			set_delivered(tp, td_delivered(tp) + acked_pcount);
+			td_set_delivered(tp, skb_tdn,
+				td_get_delivered(tp, skb_tdn) + acked_pcount);
 			if (!tcp_skb_spurious_retrans(tp, skb))
 				tcp_rack_advance(tp, sacked, scb->end_seq,
 						 tcp_skb_timestamp_us(skb));
 		}
 		if (sacked & TCPCB_LOST)
-			set_lost_out(tp, td_lost_out(tp) - acked_pcount);
+			td_set_lost_out(tp, skb_tdn,
+				td_get_lost_out(tp, skb_tdn) - acked_pcount);
 
 		/* ACKed SKBs should be credited to SKB->data_tdn_id. */
 		td_set_pkts_out(tp, skb_tdn,

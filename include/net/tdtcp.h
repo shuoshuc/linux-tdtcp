@@ -384,11 +384,25 @@ static inline u32 td_retrans_out(const struct tcp_sock *tp)
 		TD_RETRANS_OUT(tp, tp->curr_tdn_id) : tp->retrans_out;
 }
 
+/* Return retrans_out of given TDN or the default variable value. */
+static inline u32 td_get_retrans_out(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RETRANS_OUT(tp, tdn_id) : tp->retrans_out;
+}
+
 /* Assign val to retrans_out of current TDN or the default variable. */
 static inline void set_retrans_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_RETRANS_OUT(tp, tp->curr_tdn_id) : &tp->retrans_out) = val;
+}
+
+/* Assign val to retrans_out of given TDN or the default variable. */
+static inline void td_set_retrans_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RETRANS_OUT(tp, tdn_id) : &tp->retrans_out) = val;
 }
 
 /* Return lost_out of current TDN or the default variable value. */
@@ -398,11 +412,25 @@ static inline u32 td_lost_out(const struct tcp_sock *tp)
 		TD_LOST_OUT(tp, tp->curr_tdn_id) : tp->lost_out;
 }
 
+/* Return lost_out of given TDN or the default variable value. */
+static inline u32 td_get_lost_out(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_LOST_OUT(tp, tdn_id) : tp->lost_out;
+}
+
 /* Assign val to lost_out of current TDN or the default variable. */
 static inline void set_lost_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_LOST_OUT(tp, tp->curr_tdn_id) : &tp->lost_out) = val;
+}
+
+/* Assign val to lost_out of given TDN or the default variable. */
+static inline void td_set_lost_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_LOST_OUT(tp, tdn_id) : &tp->lost_out) = val;
 }
 
 /* Return sacked_out of current TDN or the default variable value. */
@@ -412,11 +440,25 @@ static inline u32 td_sacked_out(const struct tcp_sock *tp)
 		TD_SACKED_OUT(tp, tp->curr_tdn_id) : tp->sacked_out;
 }
 
+/* Return sacked_out of given TDN or the default variable value. */
+static inline u32 td_get_sacked_out(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_SACKED_OUT(tp, tdn_id) : tp->sacked_out;
+}
+
 /* Assign val to sacked_out of current TDN or the default variable. */
 static inline void set_sacked_out(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_SACKED_OUT(tp, tp->curr_tdn_id) : &tp->sacked_out) = val;
+}
+
+/* Assign val to sacked_out of given TDN or the default variable. */
+static inline void td_set_sacked_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_SACKED_OUT(tp, tdn_id) : &tp->sacked_out) = val;
 }
 
 /* Return prr_delivered of current TDN or the default variable value. */
@@ -454,11 +496,25 @@ static inline u32 td_delivered(const struct tcp_sock *tp)
 		TD_DELIVERED(tp, tp->curr_tdn_id) : tp->delivered;
 }
 
+/* Return delivered of given TDN or the default variable value. */
+static inline u32 td_get_delivered(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_DELIVERED(tp, tdn_id) : tp->delivered;
+}
+
 /* Assign val to delivered of current TDN or the default variable. */
 static inline void set_delivered(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_DELIVERED(tp, tp->curr_tdn_id) : &tp->delivered) = val;
+}
+
+/* Assign val to delivered of given TDN or the default variable. */
+static inline void td_set_delivered(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_DELIVERED(tp, tdn_id) : &tp->delivered) = val;
 }
 
 /* Return undo_retrans of current TDN or the default variable value. */
@@ -468,11 +524,25 @@ static inline int td_undo_retrans(const struct tcp_sock *tp)
 		TD_UNDO_RETRANS(tp, tp->curr_tdn_id) : tp->undo_retrans;
 }
 
+/* Return undo_retrans of given TDN or the default variable value. */
+static inline int td_get_undo_retrans(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_UNDO_RETRANS(tp, tdn_id) : tp->undo_retrans;
+}
+
 /* Assign val to undo_retrans of current TDN or the default variable. */
 static inline void set_undo_retrans(struct tcp_sock *tp, int val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_UNDO_RETRANS(tp, tp->curr_tdn_id) : &tp->undo_retrans) = val;
+}
+
+/* Assign val to undo_retrans of given TDN or the default variable. */
+static inline void td_set_undo_retrans(struct tcp_sock *tp, u8 tdn_id, int val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_UNDO_RETRANS(tp, tdn_id) : &tp->undo_retrans) = val;
 }
 
 /* Return total_retrans of current TDN or the default variable value. */
@@ -524,11 +594,25 @@ static inline u32 td_high_seq(const struct tcp_sock *tp)
 		TD_HIGH_SEQ(tp, tp->curr_tdn_id) : tp->high_seq;
 }
 
+/* Return high_seq of given TDN or the default variable value. */
+static inline u32 td_get_high_seq(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_HIGH_SEQ(tp, tdn_id) : tp->high_seq;
+}
+
 /* Assign val to high_seq of current TDN or the default variable. */
 static inline void set_high_seq(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_HIGH_SEQ(tp, tp->curr_tdn_id) : &tp->high_seq) = val;
+}
+
+/* Assign val to high_seq of given TDN or the default variable. */
+static inline void td_set_high_seq(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_HIGH_SEQ(tp, tdn_id) : &tp->high_seq) = val;
 }
 
 /* Return undo_marker of current TDN or the default variable value. */
@@ -538,11 +622,25 @@ static inline u32 td_undo_marker(const struct tcp_sock *tp)
 		TD_UNDO_MARKER(tp, tp->curr_tdn_id) : tp->undo_marker;
 }
 
+/* Return undo_marker of given TDN or the default variable value. */
+static inline u32 td_get_undo_marker(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_UNDO_MARKER(tp, tdn_id) : tp->undo_marker;
+}
+
 /* Assign val to undo_marker of current TDN or the default variable. */
 static inline void set_undo_marker(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_UNDO_MARKER(tp, tp->curr_tdn_id) : &tp->undo_marker) = val;
+}
+
+/* Assign val to undo_marker of given TDN or the default variable. */
+static inline void td_set_undo_marker(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_UNDO_MARKER(tp, tdn_id) : &tp->undo_marker) = val;
 }
 
 #else
