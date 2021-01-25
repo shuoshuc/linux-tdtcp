@@ -3787,6 +3787,12 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 		rc = NET_XMIT_SUCCESS;
 	} else {
 		rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
+		if (rc != 0) {
+			pr_debug("dev_xmit_skb: rc=%u, q->limit=%u, q->q.qlen=%u, "
+				 "qstats.backlog=%u, qstats.drops=%u.\n",
+				 rc, q->limit, q->q.qlen, q->qstats.backlog,
+				 q->qstats.drops);
+		}
 		if (qdisc_run_begin(q)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);

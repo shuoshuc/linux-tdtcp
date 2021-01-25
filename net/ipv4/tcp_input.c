@@ -2526,6 +2526,7 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag)
 	struct tcp_sock *tp = tcp_sk(sk);
 	int sndcnt = 0;
 	int delta = td_ssthresh(tp) - tcp_packets_in_flight(tp);
+	u32 prev_cwnd = td_cwnd(tp);
 
 	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!td_prior_cwnd(tp)))
 		return;
@@ -2546,6 +2547,12 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag)
 	/* Force a fast retransmit upon entering fast recovery */
 	sndcnt = max(sndcnt, (td_prr_out(tp) ? 0 : 1));
 	set_cwnd(tp, tcp_packets_in_flight(tp) + sndcnt);
+	if (sk_is_tdtcp(sk)) {
+		pr_debug("cwnd_reduction: sk=%p, tdn=%u, cwnd %u->%u, ssthresh=%u, "
+			 "pkts_in_flight=%u.",
+			 sk, tp->curr_tdn_id, prev_cwnd, td_cwnd(tp), td_ssthresh(tp),
+			 tcp_packets_in_flight(tp));
+	}
 }
 
 static inline void tcp_end_cwnd_reduction(struct sock *sk)
@@ -2869,8 +2876,21 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			/* CWR is to be held something *above* high_seq
 			 * is ACKed for CWR bit to reach receiver. */
 			if (tp->snd_una != td_high_seq(tp)) {
+				u8 prev_ca_state = td_ca_state(sk);
+				u32 prev_cwnd = td_cwnd(tp);
+				u32 prev_ssthresh = td_ssthresh(tp);
+				u32 snd_una = tp->snd_una;
+				u32 high_seq = td_high_seq(tp);
+
 				tcp_end_cwnd_reduction(sk);
 				tcp_set_ca_state(sk, TCP_CA_Open);
+
+				pr_debug("tcp_fastretrans_alert(): sk=%p, tdn=%u, ca_state %u->%u, "
+					 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
+					 "snd_una=%u, high_seq=%u.",
+					 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
+					 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
+					 tcp_packets_in_flight(tp), snd_una, high_seq);
 			}
 			break;
 
