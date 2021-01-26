@@ -830,9 +830,10 @@ static void tcp_update_pacing_rate(struct sock *sk, u8 tdn_id)
 	/* WRITE_ONCE() is needed because sch_fq fetches sk_pacing_rate
 	 * without any lock. We want to make sure compiler wont store
 	 * intermediate values in this location.
+	 * Note: td_set_pacing_rate() uses WRITE_ONCE internally.
 	 */
-	WRITE_ONCE(sk->sk_pacing_rate, min_t(u64, rate,
-					     sk->sk_max_pacing_rate));
+	td_set_pacing_rate(sk, min_t(u64, rate, td_get_pacing_rate(sk, tdn_id)),
+			   tdn_id);
 }
 
 /* Calculate rto without backoff.  This is the second half of Van Jacobson's

@@ -1184,6 +1184,7 @@ set_sndbuf:
 
 	case SO_MAX_PACING_RATE:
 		{
+		int i;
 		unsigned long ulval = (val == ~0U) ? ~0UL : (unsigned int)val;
 
 		if (sizeof(ulval) != sizeof(val) &&
@@ -1198,6 +1199,11 @@ set_sndbuf:
 				SK_PACING_NEEDED);
 		sk->sk_max_pacing_rate = ulval;
 		sk->sk_pacing_rate = min(sk->sk_pacing_rate, ulval);
+#if IS_ENABLED(CONFIG_TDTCP)
+		for (i = 0; i < MAX_NUM_TDNS; i++) {
+			td_set_pacing_rate(sk, min(td_get_pacing_rate(sk, i), ulval), i);
+		}
+#endif
 		break;
 		}
 	case SO_INCOMING_CPU:
@@ -2980,6 +2986,8 @@ EXPORT_SYMBOL(sk_stop_timer);
 
 void sock_init_data(struct socket *sock, struct sock *sk)
 {
+	int i;
+
 	sk_init_common(sk);
 	sk->sk_send_head	=	NULL;
 
@@ -3045,6 +3053,11 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 
 	sk->sk_max_pacing_rate = ~0UL;
 	sk->sk_pacing_rate = ~0UL;
+#if IS_ENABLED(CONFIG_TDTCP)
+	for (i = 0; i < MAX_NUM_TDNS; i++) {
+		td_set_pacing_rate(sk, ~0UL, i);
+	}
+#endif
 	WRITE_ONCE(sk->sk_pacing_shift, 10);
 	sk->sk_incoming_cpu = -1;
 

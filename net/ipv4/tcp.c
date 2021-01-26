@@ -3432,7 +3432,11 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_state = inet_sk_state_load(sk);
 
 	/* Report meaningful fields for all TCP states, including listeners */
-	rate = READ_ONCE(sk->sk_pacing_rate);
+	/* Strip READ_ONCE() because it needs a lvalue not a function return.
+	 * But since this function is just collecting non-critical stats, we do
+	 * not have to be so strict.
+	 */
+	rate = td_pacing_rate(sk);
 	rate64 = (rate != ~0UL) ? rate : ~0ULL;
 	info->tcpi_pacing_rate = rate64;
 
@@ -3588,7 +3592,11 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u64_64bit(stats, TCP_NLA_TOTAL_RETRANS,
 			  td_total_retrans(tp), TCP_NLA_PAD);
 
-	rate = READ_ONCE(sk->sk_pacing_rate);
+	/* Strip READ_ONCE() because it needs a lvalue not a function return.
+	 * But since this function is just collecting non-critical stats, we do
+	 * not have to be so strict.
+	 */
+	rate = td_pacing_rate(sk);
 	rate64 = (rate != ~0UL) ? rate : ~0ULL;
 	nla_put_u64_64bit(stats, TCP_NLA_PACING_RATE, rate64, TCP_NLA_PAD);
 

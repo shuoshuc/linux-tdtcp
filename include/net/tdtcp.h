@@ -36,6 +36,9 @@
 #define TD_DA_FLG_D 0x02 /* packet contains TDTCP sub data seq only */
 #define TD_DA_FLG_B 0x04 /* packet contains both TDTCP sub data seq and ack */
 
+/* Macros to help shorten accessing sock td_subf members. */
+#define TD_PACING_RATE(sk, tdn_id) (sk)->td_subf[tdn_id].sk_pacing_rate
+
 /* Macros to help shorten accessing inet_sock td_subf members. */
 #define TD_CA_STATE(icsk, tdn_id) (icsk)->td_subf[tdn_id].ca_state
 #define TD_ICSK_REXMITS(icsk, tdn_id) (icsk)->td_subf[tdn_id].icsk_retransmits
@@ -121,6 +124,42 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 /* Populates SKB CB with TDDA FLG_D metadata. */
 void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk,
 			u8 flags);
+
+/* Return sk_pacing_rate of current TDN or the default variable value. */
+static inline unsigned long td_pacing_rate(const struct sock *sk)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PACING_RATE(sk, tcp_sk(sk)->curr_tdn_id) : sk->sk_pacing_rate;
+}
+
+/* Return sk_pacing_rate of given TDN or the default variable value. */
+static inline unsigned long td_get_pacing_rate(const struct sock *sk, u8 tdn_id)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PACING_RATE(sk, tdn_id) : sk->sk_pacing_rate;
+}
+
+/* Assign val to sk_pacing_rate of current TDN or the default variable.
+ * Note that sk_pacing_rate is shared between FQ qdisc and TCP stack,
+ * so we use WRITE_ONCE to get rid of potential cache.
+ */
+static inline void set_pacing_rate(struct sock *sk, unsigned long val)
+{
+	WRITE_ONCE(*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		     &TD_PACING_RATE(sk, tcp_sk(sk)->curr_tdn_id) :
+		     &sk->sk_pacing_rate), val);
+}
+
+/* Assign val to sk_pacing_rate of given TDN or the default variable.
+ * Note that sk_pacing_rate is shared between FQ qdisc and TCP stack,
+ * so we use WRITE_ONCE to get rid of potential cache.
+ */
+static inline void td_set_pacing_rate(struct sock *sk, unsigned long val,
+				      u8 tdn_id)
+{
+	WRITE_ONCE(*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		     &TD_PACING_RATE(sk, tdn_id) : &sk->sk_pacing_rate), val);
+}
 
 /* Return ca_state of current TDN or the default variable value. */
 static inline u8 td_ca_state(const struct sock *sk)

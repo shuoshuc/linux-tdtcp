@@ -26,9 +26,6 @@
 struct inet_bind_bucket;
 struct tcp_congestion_ops;
 
-/* Max number of TDNs supported. */
-#define MAX_NUM_TDNS 4
-
 /*
  * Pointers to address related TCP functions
  * (i.e. things that depend on the address family)

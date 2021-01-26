@@ -68,6 +68,9 @@
 #include <linux/net_tstamp.h>
 #include <net/l3mdev.h>
 
+/* Max number of TDNs supported. */
+#define MAX_NUM_TDNS 4
+
 /*
  * This structure really needs to be cleaned up.
  * Most of it is for TCP, and not used by any of
@@ -519,6 +522,13 @@ struct sock {
 	struct bpf_sk_storage __rcu	*sk_bpf_storage;
 #endif
 	struct rcu_head		sk_rcu;
+
+#if IS_ENABLED(CONFIG_TDTCP)
+	struct sk_td_subflow {
+		/* bytes per second */
+		unsigned long		sk_pacing_rate;
+	} td_subf[MAX_NUM_TDNS];
+#endif
 };
 
 enum sk_pacing {
