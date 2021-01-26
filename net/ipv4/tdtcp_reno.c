@@ -14,12 +14,13 @@
  * ABC caps N to 2. Slow start exits when cwnd grows over ssthresh and
  * returns the leftover acks to adjust cwnd in congestion avoidance mode.
  */
-static u32 tdtcp_slow_start(struct tcp_sock *tp, u32 acked)
+static u32 tdtcp_slow_start(struct tcp_sock *tp, u32 acked, u8 tdn_id)
 {
-	u32 cwnd = min(tp->snd_cwnd + acked, tp->snd_ssthresh);
+	u32 cwnd = min(td_get_cwnd(tp, tdn_id) + acked,
+		       td_get_ssthresh(tp, tdn_id));
 
-	acked -= cwnd - tp->snd_cwnd;
-	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
+	acked -= cwnd - td_get_cwnd(tp, tdn_id);
+	td_set_cwnd(tp, min(cwnd, tp->snd_cwnd_clamp), tdn_id);
 
 	return acked;
 }
@@ -27,22 +28,23 @@ static u32 tdtcp_slow_start(struct tcp_sock *tp, u32 acked)
 /* In theory this is tp->snd_cwnd += 1 / tp->snd_cwnd (or alternative w),
  * for every packet that was ACKed.
  */
-static void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked)
+static void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked, u8 tdn_id)
 {
 	/* If credits accumulated at a higher w, apply them gently now. */
-	if (tp->snd_cwnd_cnt >= w) {
-		tp->snd_cwnd_cnt = 0;
-		tp->snd_cwnd++;
+	if (td_get_cwnd_cnt(tp, tdn_id) >= w) {
+		td_set_cwnd_cnt(tp, 0, tdn_id);
+		td_set_cwnd(tp, td_get_cwnd(tp, tdn_id) + 1, tdn_id);
 	}
 
-	tp->snd_cwnd_cnt += acked;
-	if (tp->snd_cwnd_cnt >= w) {
-		u32 delta = tp->snd_cwnd_cnt / w;
+	td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn_id) + acked, tdn_id);
+	if (td_get_cwnd_cnt(tp, tdn_id) >= w) {
+		u32 delta = td_get_cwnd_cnt(tp, tdn_id) / w;
 
-		tp->snd_cwnd_cnt -= delta * w;
-		tp->snd_cwnd += delta;
+		td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn_id) - delta * w,
+				tdn_id);
+		td_set_cwnd(tp, td_get_cwnd(tp, tdn_id) + delta, tdn_id);
 	}
-	tp->snd_cwnd = min(tp->snd_cwnd, tp->snd_cwnd_clamp);
+	td_set_cwnd(tp, min(td_get_cwnd(tp, tdn_id), tp->snd_cwnd_clamp), tdn_id);
 }
 
 /*
@@ -52,21 +54,21 @@ static void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked)
 /* This is Jacobson's slow start and congestion avoidance.
  * SIGCOMM '88, p. 328.
  */
-static void tdtcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked)
+static void tdtcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (!tcp_is_cwnd_limited(sk))
+	if (!tcp_is_cwnd_limited(sk, tdn_id))
 		return;
 
 	/* In "safe" area, increase. */
-	if (tcp_in_slow_start(tp)) {
-		acked = tdtcp_slow_start(tp, acked);
+	if (tcp_in_slow_start(tp, tdn_id)) {
+		acked = tdtcp_slow_start(tp, acked, tdn_id);
 		if (!acked)
 			return;
 	}
 	/* In dangerous area, increase slowly. */
-	tdtcp_cong_avoid_ai(tp, tp->snd_cwnd, acked);
+	tdtcp_cong_avoid_ai(tp, td_get_cwnd(tp, tdn_id), acked, tdn_id);
 }
 
 /* Slow start threshold is half the congestion window (min 2) */
@@ -74,14 +76,14 @@ static u32 tdtcp_reno_ssthresh(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(tp->snd_cwnd >> 1U, 2U);
+	return max(td_cwnd(tp) >> 1U, 2U);
 }
 
 static u32 tdtcp_reno_undo_cwnd(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(tp->snd_cwnd, tp->prior_cwnd);
+	return max(td_cwnd(tp), td_prior_cwnd(tp));
 }
 
 static struct tcp_congestion_ops tdtcp_reno __read_mostly = {

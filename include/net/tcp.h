@@ -387,7 +387,8 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 int tcp_child_process(struct sock *parent, struct sock *child,
 		      struct sk_buff *skb);
 void tcp_enter_loss(struct sock *sk);
-void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag);
+void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
+			u8 tdn_id);
 void tcp_clear_retrans(struct tcp_sock *tp);
 void tcp_update_metrics(struct sock *sk);
 void tcp_init_metrics(struct sock *sk);
@@ -1074,7 +1075,7 @@ struct tcp_congestion_ops {
 	/* return slow start threshold (required) */
 	u32 (*ssthresh)(struct sock *sk);
 	/* do new cwnd calculation (required) */
-	void (*cong_avoid)(struct sock *sk, u32 ack, u32 acked);
+	void (*cong_avoid)(struct sock *sk, u32 ack, u32 acked, u8 tdn_id);
 	/* call before changing ca_state (optional) */
 	void (*set_state)(struct sock *sk, u8 new_state);
 	/* call when cwnd event occurs (optional) */
@@ -1119,7 +1120,7 @@ void tcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked);
 
 u32 tcp_reno_ssthresh(struct sock *sk);
 u32 tcp_reno_undo_cwnd(struct sock *sk);
-void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked);
+void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id);
 extern struct tcp_congestion_ops tcp_reno;
 
 struct tcp_congestion_ops *tcp_ca_find(const char *name);
@@ -1209,9 +1210,9 @@ static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
 
-static inline bool tcp_in_slow_start(const struct tcp_sock *tp)
+static inline bool tcp_in_slow_start(const struct tcp_sock *tp, u8 tdn_id)
 {
-	return td_cwnd(tp) < td_ssthresh(tp);
+	return td_get_cwnd(tp, tdn_id) < td_get_ssthresh(tp, tdn_id);
 }
 
 static inline bool tcp_in_initial_slowstart(const struct tcp_sock *tp)
@@ -1274,15 +1275,15 @@ static inline u32 tcp_wnd_end(const struct tcp_sock *tp)
  * either send more filler packets or data to artificially blow up the cwnd
  * usage, and allow application-limited process to probe bw more aggressively.
  */
-static inline bool tcp_is_cwnd_limited(const struct sock *sk)
+static inline bool tcp_is_cwnd_limited(const struct sock *sk, u8 tdn_id)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	/* If in slow start, ensure cwnd grows to twice what was ACKed. */
-	if (tcp_in_slow_start(tp))
-		return td_cwnd(tp) < 2 * td_max_pkts_out(tp);
+	if (tcp_in_slow_start(tp, tdn_id))
+		return td_get_cwnd(tp, tdn_id) < 2 * td_get_max_pkts_out(tp, tdn_id);
 
-	return td_cwnd_limited(tp);
+	return td_get_cwnd_limited(tp, tdn_id);
 }
 
 /* BBR congestion control needs pacing.

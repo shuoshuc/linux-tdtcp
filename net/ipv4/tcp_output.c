@@ -1786,7 +1786,7 @@ static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 		set_cwnd_limited(tp, is_cwnd_limited);
 	}
 
-	if (tcp_is_cwnd_limited(sk)) {
+	if (tcp_is_cwnd_limited(sk, tp->curr_tdn_id)) {
 		/* Network is feed fully. */
 		set_cwnd_used(tp, 0);
 		set_cwnd_stamp(tp, tcp_jiffies32);

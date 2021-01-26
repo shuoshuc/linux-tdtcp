@@ -801,7 +801,7 @@ static void tcp_rtt_estimator(struct sock *sk, long mrtt_us)
 	tp->srtt_us = max(1U, srtt);
 }
 
-static void tcp_update_pacing_rate(struct sock *sk)
+static void tcp_update_pacing_rate(struct sock *sk, u8 tdn_id)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	u64 rate;
@@ -817,12 +817,12 @@ static void tcp_update_pacing_rate(struct sock *sk)
 	 *	 If snd_cwnd >= (tp->snd_ssthresh / 2), we are approaching
 	 *	 end of slow start and should slow down.
 	 */
-	if (td_cwnd(tp) < td_ssthresh(tp) / 2)
+	if (td_get_cwnd(tp, tdn_id) < td_get_ssthresh(tp, tdn_id) / 2)
 		rate *= sock_net(sk)->ipv4.sysctl_tcp_pacing_ss_ratio;
 	else
 		rate *= sock_net(sk)->ipv4.sysctl_tcp_pacing_ca_ratio;
 
-	rate *= max(td_cwnd(tp), td_pkts_out(tp));
+	rate *= max(td_get_cwnd(tp, tdn_id), td_get_pkts_out(tp, tdn_id));
 
 	if (likely(tp->srtt_us))
 		do_div(rate, tp->srtt_us);
@@ -2521,37 +2521,44 @@ static void tcp_init_cwnd_reduction(struct sock *sk)
 	tcp_ecn_queue_cwr(tp);
 }
 
-void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag)
+void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
+			u8 tdn_id)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	int sndcnt = 0;
-	int delta = td_ssthresh(tp) - tcp_packets_in_flight(tp);
-	u32 prev_cwnd = td_cwnd(tp);
+	int delta = td_get_ssthresh(tp, tdn_id) - tdtcp_packets_in_flight(tp, tdn_id);
+	u32 prev_cwnd = td_get_cwnd(tp, tdn_id);
 
-	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!td_prior_cwnd(tp)))
+	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!td_get_prior_cwnd(tp, tdn_id)))
 		return;
 
-	set_prr_delivered(tp, td_prr_delivered(tp) + newly_acked_sacked);
+	td_set_prr_delivered(tp, td_get_prr_delivered(tp, tdn_id) +
+			     newly_acked_sacked, tdn_id);
 	if (delta < 0) {
-		u64 dividend = (u64)td_ssthresh(tp) * td_prr_delivered(tp) +
-			       td_prior_cwnd(tp) - 1;
-		sndcnt = div_u64(dividend, td_prior_cwnd(tp)) - td_prr_out(tp);
+		u64 dividend = (u64)td_get_ssthresh(tp, tdn_id) *
+			td_get_prr_delivered(tp, tdn_id) +
+			td_get_prior_cwnd(tp, tdn_id) - 1;
+		sndcnt = div_u64(dividend, td_get_prior_cwnd(tp, tdn_id)) -
+			td_get_prr_out(tp, tdn_id);
 	} else if ((flag & (FLAG_RETRANS_DATA_ACKED | FLAG_LOST_RETRANS)) ==
 		   FLAG_RETRANS_DATA_ACKED) {
 		sndcnt = min_t(int, delta,
-			       max_t(int, td_prr_delivered(tp) - td_prr_out(tp),
+			       max_t(int, td_get_prr_delivered(tp, tdn_id) -
+				     td_get_prr_out(tp, tdn_id),
 				     newly_acked_sacked) + 1);
 	} else {
 		sndcnt = min(delta, newly_acked_sacked);
 	}
 	/* Force a fast retransmit upon entering fast recovery */
-	sndcnt = max(sndcnt, (td_prr_out(tp) ? 0 : 1));
-	set_cwnd(tp, tcp_packets_in_flight(tp) + sndcnt);
+	sndcnt = max(sndcnt, (td_get_prr_out(tp, tdn_id) ? 0 : 1));
+	td_set_cwnd(tp, tdtcp_packets_in_flight(tp, tdn_id) + sndcnt, tdn_id);
+
 	if (sk_is_tdtcp(sk)) {
 		pr_debug("cwnd_reduction: sk=%p, tdn=%u, cwnd %u->%u, ssthresh=%u, "
 			 "pkts_in_flight=%u.",
-			 sk, tp->curr_tdn_id, prev_cwnd, td_cwnd(tp), td_ssthresh(tp),
-			 tcp_packets_in_flight(tp));
+			 sk, tdn_id, prev_cwnd, td_get_cwnd(tp, tdn_id),
+			 td_get_ssthresh(tp, tdn_id),
+			 tdtcp_packets_in_flight(tp, tdn_id));
 	}
 }
 
@@ -3042,12 +3049,12 @@ void tcp_synack_rtt_meas(struct sock *sk, struct request_sock *req)
 }
 
 
-static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
+static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 
-	icsk->icsk_ca_ops->cong_avoid(sk, ack, acked);
-	set_cwnd_stamp(tcp_sk(sk), tcp_jiffies32);
+	icsk->icsk_ca_ops->cong_avoid(sk, ack, acked, tdn_id);
+	td_set_cwnd_stamp(tcp_sk(sk), tcp_jiffies32, tdn_id);
 }
 
 /* Restart timer after forward progress on connection.
@@ -3379,7 +3386,8 @@ static inline bool tcp_ack_is_dubious(const struct sock *sk, const int flag)
 }
 
 /* Decide wheather to run the increase function of congestion control. */
-static inline bool tcp_may_raise_cwnd(const struct sock *sk, const int flag)
+static inline bool tcp_may_raise_cwnd(const struct sock *sk, const int flag,
+				      u8 tdn_id)
 {
 	/* If reordering is high then always grow cwnd whenever data is
 	 * delivered regardless of its ordering. Otherwise stay conservative
@@ -3387,7 +3395,8 @@ static inline bool tcp_may_raise_cwnd(const struct sock *sk, const int flag)
 	 * new SACK or ECE mark may first advance cwnd here and later reduce
 	 * cwnd in tcp_fastretrans_alert() based on more states.
 	 */
-	if (td_reordering(tcp_sk(sk)) > sock_net(sk)->ipv4.sysctl_tcp_reordering)
+	if (td_get_reordering(tcp_sk(sk), tdn_id) >
+	    sock_net(sk)->ipv4.sysctl_tcp_reordering)
 		return flag & FLAG_FORWARD_PROGRESS;
 
 	return flag & FLAG_DATA_ACKED;
@@ -3399,7 +3408,7 @@ static inline bool tcp_may_raise_cwnd(const struct sock *sk, const int flag)
  * information. All transmission or retransmission are delayed afterwards.
  */
 static void tcp_cong_control(struct sock *sk, u32 ack, u32 acked_sacked,
-			     int flag, const struct rate_sample *rs)
+			     int flag, const struct rate_sample *rs, u8 tdn_id)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 
@@ -3408,14 +3417,14 @@ static void tcp_cong_control(struct sock *sk, u32 ack, u32 acked_sacked,
 		return;
 	}
 
-	if (tcp_in_cwnd_reduction(sk)) {
+	if (tdtcp_in_cwnd_reduction(sk, tdn_id)) {
 		/* Reduce cwnd if state mandates */
-		tcp_cwnd_reduction(sk, acked_sacked, flag);
-	} else if (tcp_may_raise_cwnd(sk, flag)) {
+		tcp_cwnd_reduction(sk, acked_sacked, flag, tdn_id);
+	} else if (tcp_may_raise_cwnd(sk, flag, tdn_id)) {
 		/* Advance cwnd if state allows */
-		tcp_cong_avoid(sk, ack, acked_sacked);
+		tcp_cong_avoid(sk, ack, acked_sacked, tdn_id);
 	}
-	tcp_update_pacing_rate(sk);
+	tcp_update_pacing_rate(sk, tdn_id);
 }
 
 /* Check that window update is acceptable.
@@ -3645,13 +3654,14 @@ static void tcp_xmit_recovery(struct sock *sk, int rexmit)
 }
 
 /* Returns the number of packets newly acked or sacked by the current ACK */
-static u32 tcp_newly_delivered(struct sock *sk, u32 prior_delivered, int flag)
+static u32 tcp_newly_delivered(struct sock *sk, u32 prior_delivered, int flag,
+			       u8 tdn_id)
 {
 	const struct net *net = sock_net(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 delivered;
 
-	delivered = td_delivered(tp) - prior_delivered;
+	delivered = td_get_delivered(tp, tdn_id) - prior_delivered;
 	NET_ADD_STATS(net, LINUX_MIB_TCPDELIVERED, delivered);
 	if (flag & FLAG_ECE) {
 		tp->delivered_ce += delivered;
@@ -3673,10 +3683,22 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	u32 ack = TCP_SKB_CB(skb)->ack_seq;
 	int num_dupack = 0;
 	int prior_packets = td_pkts_out(tp);
-	u32 delivered = td_delivered(tp);
 	u32 lost = tp->lost;
 	int rexmit = REXMIT_NONE; /* Flag to (re)transmit to recover losses */
 	u32 prior_fack;
+	u32 delivered[MAX_NUM_TDNS] = {0};
+	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
+	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
+	 * will be automatically redirected to the default ones.
+	 */
+	u8 i, num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	u8 curr_tdn = IS_ENABLED(CONFIG_TDTCP) ? tp->curr_tdn_id : 0;
+	/* If TDTCP is not enabled, the default tp->delivered is stored in entry
+	 * 0 of the array. The rest entries should be 0 and never used.
+	 */
+	for (i = 0; i < num_tdns; i++) {
+		delivered[i] = td_get_delivered(tp, i);
+	}
 
 	sack_state.first_sackt = 0;
 	sack_state.rate = &rs;
@@ -3804,11 +3826,16 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	if ((flag & FLAG_FORWARD_PROGRESS) || !(flag & FLAG_NOT_DUP))
 		sk_dst_confirm(sk);
 
-	delivered = tcp_newly_delivered(sk, delivered, flag);
+	for (i = 0; i < num_tdns; i++) {
+		delivered[i] = tcp_newly_delivered(sk, delivered[i], flag, i);
+	}
 	lost = tp->lost - lost;			/* freshly marked lost */
 	rs.is_ack_delayed = !!(flag & FLAG_ACK_MAYBE_DELAYED);
-	tcp_rate_gen(sk, delivered, lost, is_sack_reneg, sack_state.rate);
-	tcp_cong_control(sk, ack, delivered, flag, sack_state.rate);
+	/* Only BBR uses rate estimation. */
+	tcp_rate_gen(sk, delivered[curr_tdn], lost, is_sack_reneg, sack_state.rate);
+	for (i = 0; i < num_tdns; i++) {
+		tcp_cong_control(sk, ack, delivered[i], flag, sack_state.rate, i);
+	}
 	tcp_xmit_recovery(sk, rexmit);
 	return 1;
 
@@ -3817,7 +3844,12 @@ no_queue:
 	if (flag & FLAG_DSACKING_ACK) {
 		tcp_fastretrans_alert(sk, prior_snd_una, num_dupack, &flag,
 				      &rexmit);
-		tcp_newly_delivered(sk, delivered, flag);
+		/* Return value is not needed because we only want to update
+		 * some counters.
+		 */
+		for (i = 0; i < num_tdns; i++) {
+			tcp_newly_delivered(sk, delivered[i], flag, i);
+		}
 	}
 	/* If this ack opens up a zero window, clear backoff.  It was
 	 * being used to time the probes, and is probably far higher than
@@ -3838,7 +3870,12 @@ old_ack:
 						&sack_state);
 		tcp_fastretrans_alert(sk, prior_snd_una, num_dupack, &flag,
 				      &rexmit);
-		tcp_newly_delivered(sk, delivered, flag);
+		/* Return value is not needed because we only want to update
+		 * some counters.
+		 */
+		for (i = 0; i < num_tdns; i++) {
+			tcp_newly_delivered(sk, delivered[i], flag, i);
+		}
 		tcp_xmit_recovery(sk, rexmit);
 	}
 
@@ -6437,7 +6474,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 
 		if (!inet_csk(sk)->icsk_ca_ops->cong_control)
-			tcp_update_pacing_rate(sk);
+			tcp_update_pacing_rate(sk, tp->curr_tdn_id);
 
 		/* Prevent spurious tcp_cwnd_restart() on first data packet */
 		tp->lsndtime = tcp_jiffies32;

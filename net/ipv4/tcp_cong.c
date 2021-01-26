@@ -388,6 +388,10 @@ int tcp_set_congestion_control(struct sock *sk, const char *name, bool load,
 	return err;
 }
 
+/* Note: Do not use default Reno in TDTCP. Use TDTCP_Reno instead. The default
+ * Reno is only kept as a fallback option, which is not expected to be used.
+ */
+
 /* Slow start is used when congestion window is no greater than the slow start
  * threshold. We base on RFC2581 and also handle stretch ACKs properly.
  * We do not implement RFC3465 Appropriate Byte Counting (ABC) per se but
@@ -437,15 +441,15 @@ EXPORT_SYMBOL_GPL(tcp_cong_avoid_ai);
 /* This is Jacobson's slow start and congestion avoidance.
  * SIGCOMM '88, p. 328.
  */
-void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked)
+void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (!tcp_is_cwnd_limited(sk))
+	if (!tcp_is_cwnd_limited(sk, tdn_id))
 		return;
 
 	/* In "safe" area, increase. */
-	if (tcp_in_slow_start(tp)) {
+	if (tcp_in_slow_start(tp, tdn_id)) {
 		acked = tcp_slow_start(tp, acked);
 		if (!acked)
 			return;
