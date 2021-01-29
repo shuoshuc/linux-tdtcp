@@ -1069,8 +1069,6 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				continue;
 
 			tp = tcp_sk(sk);
-			/* Minimum locking only if socket is valid to update. */
-			lock_sock(sk);
 			if (tdn_id < 0 || tdn_id >= tp->num_tdns) {
 				/* We do not special handle invalid scenarios,
 				 * or try to fix it. So just simply skip.
@@ -1079,11 +1077,13 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					 " new curr_tdn_id=%u, num_tdns=%u on "
 					 "sk=%p.", tdn_id, tp->num_tdns, sk);
 			} else {
-				pr_debug("[ICMP TDN]: sk=%p, curr_tdn=%u, snd_una=%u, "
+				pr_debug("[pre-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
 					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
 					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
 					 td_cwnd(tp), tp->rcv_wnd, tp->snd_wnd);
-				curr_tdn_id = READ_ONCE(tp->curr_tdn_id);
+
+				/* curr_tdn_id = READ_ONCE(tp->curr_tdn_id); */
+
 				/* If prev_snd_una != prev_snd_nxt, that means
 				 * tdn_id's window from 2 cycles ago is still
 				 * not closed. This indicates that TDNs switch
@@ -1093,6 +1093,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				 * Because there is a good chance that TDTCP
 				 * engine will not function correctly.
 				 */
+				/*
 				if (TD_PREV_UNA(tp, tdn_id) !=
 				    TD_PREV_NXT(tp, tdn_id)) {
 					pr_debug("ICMP TDN change: tdn_id=%u "
@@ -1104,6 +1105,8 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					BUG_ON(TD_PREV_UNA(tp, tdn_id) !=
 					       TD_PREV_NXT(tp, tdn_id));
 				}
+				*/
+
 				/* Open up a new window for tdn_id, starting
 				 * from snd_nxt of curr_tdn_id. Roll snd_una and
 				 * snd_nxt of tdn_id (the previous window) over
@@ -1117,12 +1120,11 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				WRITE_ONCE(tp->curr_tdn_id, tdn_id);
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
 					 "on sk=%p.", tp->curr_tdn_id, sk);
-				pr_debug("[ICMP TDN]: sk=%p, curr_tdn=%u, snd_una=%u, "
+				pr_debug("[post-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
 					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
 					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
 					 td_cwnd(tp), tp->rcv_wnd, tp->snd_wnd);
 			}
-			release_sock(sk);
 		}
 	}
 	return true;
