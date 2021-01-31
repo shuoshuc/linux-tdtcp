@@ -94,6 +94,8 @@
 #include <net/ip_fib.h>
 #include <net/l3mdev.h>
 
+extern struct workqueue_struct *tdn_updater_wq;
+
 /*
  *	Build xmit assembly blocks
  */
@@ -1036,7 +1038,10 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	struct sock *sk;
 	const struct hlist_nulls_node *node;
 	unsigned int i;
-	u8 curr_tdn_id, tdn_id = 0xFF; /* 0 is a valid TDN ID, so use 0xFF for init. */
+	/* 0 is a valid TDN ID, so use 0xFF for init. */
+	u8 curr_tdn_id, tdn_id = 0xFF;
+	/* contains the data we need to submit to TDN updater work queue. */
+	struct tdn_work_data *data;
 
 	net = dev_net(skb_dst(skb)->dev);
 	icmph = icmp_hdr(skb);
@@ -1069,7 +1074,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				continue;
 
 			tp = tcp_sk(sk);
-			if (tdn_id < 0 || tdn_id >= tp->num_tdns) {
+			if (unlikely(tdn_id < 0 || tdn_id >= tp->num_tdns)) {
 				/* We do not special handle invalid scenarios,
 				 * or try to fix it. So just simply skip.
 				 */
@@ -1082,7 +1087,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
 					 td_cwnd(tp), tp->rcv_wnd, tp->snd_wnd);
 
-				/* curr_tdn_id = READ_ONCE(tp->curr_tdn_id); */
+				// curr_tdn_id = READ_ONCE(tp->curr_tdn_id);
 
 				/* If prev_snd_una != prev_snd_nxt, that means
 				 * tdn_id's window from 2 cycles ago is still
@@ -1117,9 +1122,21 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				// TD_UNA(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
 				// TD_NXT(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
 
-				WRITE_ONCE(tp->curr_tdn_id, tdn_id);
+				//WRITE_ONCE(tp->curr_tdn_id, tdn_id);
+
+				/* Submit the actual TDN update work to work
+				 * queue, so that it can block and acquire the
+				 * sock lock to perform a safe update.
+				 */
+				data = kmalloc(sizeof(struct tdn_work_data), GFP_ATOMIC);
+				data->sk = sk;
+				data->tdn_id = tdn_id;
+				INIT_WORK(&data->tdn_work, tdn_update_handler);
+				queue_work(tdn_updater_wq, &data->tdn_work);
+
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
-					 "on sk=%p.", tp->curr_tdn_id, sk);
+					 "on sk=%p, dispatched to workqueue.",
+					 tp->curr_tdn_id, sk);
 				pr_debug("[post-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
 					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
 					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,

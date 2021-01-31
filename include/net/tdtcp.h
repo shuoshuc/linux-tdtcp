@@ -11,6 +11,7 @@
 #include <linux/kconfig.h>
 #include <linux/types.h>
 #include <linux/tcp.h>
+#include <linux/workqueue.h>
 
 /* Hard codes # TDNs to be 2. It needs to be properly received from the ToR via
  * a control message.
@@ -890,5 +891,13 @@ static inline bool tdtcp_established_options(struct sock *sk,
 }
 
 #endif /* CONFIG_TDTCP */
+
+struct tdn_work_data {
+	struct work_struct	tdn_work;
+	struct sock		*sk;
+	u8			tdn_id;
+};
+
+void tdn_update_handler(struct work_struct *work);
 
 #endif /* __NET_TDTCP_H */
