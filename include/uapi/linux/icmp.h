@@ -81,7 +81,6 @@ struct icmphdr {
 		__be16	__unused;
 		__be16	mtu;
 	} frag;
-#ifdef CONFIG_TDTCP
 	/* The first byte of a 4-byte word is TDN ID. Include a 3-byte array as
 	 * placeholder for the rest 3 bytes in the same word.
 	 */
@@ -89,7 +88,6 @@ struct icmphdr {
 		__u8	id;
 		__u8	__unused[3];
 	} active_tdn;
-#endif
 	__u8	reserved[4];
   } un;
 };
