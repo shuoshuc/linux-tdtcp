@@ -2879,17 +2879,17 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		WARN_ON(td_retrans_out(tp) != 0);
 		set_retrans_stamp(tp, 0);
 	} else if (!before(tp->snd_una, td_high_seq(tp))) {
+		u8 prev_ca_state = td_ca_state(sk);
+		u32 prev_cwnd = td_cwnd(tp);
+		u32 prev_ssthresh = td_ssthresh(tp);
+		u32 snd_una = tp->snd_una;
+		u32 high_seq = td_high_seq(tp);
+
 		switch (td_ca_state(sk)) {
 		case TCP_CA_CWR:
 			/* CWR is to be held something *above* high_seq
 			 * is ACKed for CWR bit to reach receiver. */
 			if (tp->snd_una != td_high_seq(tp)) {
-				u8 prev_ca_state = td_ca_state(sk);
-				u32 prev_cwnd = td_cwnd(tp);
-				u32 prev_ssthresh = td_ssthresh(tp);
-				u32 snd_una = tp->snd_una;
-				u32 high_seq = td_high_seq(tp);
-
 				tcp_end_cwnd_reduction(sk);
 				tcp_set_ca_state(sk, TCP_CA_Open);
 
@@ -2903,12 +2903,6 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			break;
 
 		case TCP_CA_Recovery:
-			u8 prev_ca_state = td_ca_state(sk);
-			u32 prev_cwnd = td_cwnd(tp);
-			u32 prev_ssthresh = td_ssthresh(tp);
-			u32 snd_una = tp->snd_una;
-			u32 high_seq = td_high_seq(tp);
-
 			if (tcp_is_reno(tp))
 				tcp_reset_reno_sack(tp);
 			if (tcp_try_undo_recovery(sk))
@@ -2921,8 +2915,8 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 				 "snd_una=%u, high_seq=%u.",
 				 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
 				 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
-				 tcp_packets_in_flight(tp), tp_pkts_out(tp),
-				 tp_sacked_out(tp), tp_lost_out(tp), tp_retrans_out(tp),
+				 tcp_packets_in_flight(tp), td_pkts_out(tp),
+				 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
 				 snd_una, high_seq);
 			break;
 		}
@@ -2981,11 +2975,11 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			return;
 		}
 
-		u8 prev_ca_state = td_ca_state(sk);
-		u32 prev_cwnd = td_cwnd(tp);
-		u32 prev_ssthresh = td_ssthresh(tp);
-		u32 snd_una = tp->snd_una;
-		u32 high_seq = td_high_seq(tp);
+		u8 prev_ca_state2 = td_ca_state(sk);
+		u32 prev_cwnd2 = td_cwnd(tp);
+		u32 prev_ssthresh2 = td_ssthresh(tp);
+		u32 snd_una2 = tp->snd_una;
+		u32 high_seq2 = td_high_seq(tp);
 
 		/* Otherwise enter Recovery state */
 		tcp_enter_recovery(sk, (flag & FLAG_ECE));
@@ -2995,11 +2989,11 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 			 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
 			 "snd_una=%u, high_seq=%u.",
-			 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
-			 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
-			 tcp_packets_in_flight(tp), tp_pkts_out(tp),
-			 tp_sacked_out(tp), tp_lost_out(tp), tp_retrans_out(tp),
-			 snd_una, high_seq);
+			 sk, tp->curr_tdn_id, prev_ca_state2, td_ca_state(sk),
+			 prev_cwnd2, td_cwnd(tp), prev_ssthresh2, td_ssthresh(tp),
+			 tcp_packets_in_flight(tp), td_pkts_out(tp),
+			 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
+			 snd_una2, high_seq2);
 	}
 
 	if (!tcp_is_rack(sk) && do_lost)
