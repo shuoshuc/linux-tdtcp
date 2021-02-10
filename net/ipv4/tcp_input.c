@@ -2895,7 +2895,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 
 				pr_debug("tcp_fastretrans_alert(): sk=%p, tdn=%u, ca_state %u->%u, "
 					 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
-					 "snd_una=%u, high_seq=%u.",
+					 "snd_una=%u, high_seq=%u.\n",
 					 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
 					 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
 					 tcp_packets_in_flight(tp), snd_una, high_seq);
@@ -2912,7 +2912,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			pr_debug("[exit recovery] sk=%p, tdn=%u, ca_state %u->%u, "
 				 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 				 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
-				 "snd_una=%u, high_seq=%u.",
+				 "snd_una=%u, high_seq=%u.\n",
 				 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
 				 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
 				 tcp_packets_in_flight(tp), td_pkts_out(tp),
@@ -2988,7 +2988,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		pr_debug("[enter recovery] sk=%p, tdn=%u, ca_state %u->%u, "
 			 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 			 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
-			 "snd_una=%u, high_seq=%u.",
+			 "snd_una=%u, high_seq=%u.\n",
 			 sk, tp->curr_tdn_id, prev_ca_state2, td_ca_state(sk),
 			 prev_cwnd2, td_cwnd(tp), prev_ssthresh2, td_ssthresh(tp),
 			 tcp_packets_in_flight(tp), td_pkts_out(tp),
