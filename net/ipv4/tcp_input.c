@@ -951,7 +951,9 @@ static void tcp_skb_mark_lost(struct tcp_sock *tp, struct sk_buff *skb)
 	if (!(TCP_SKB_CB(skb)->sacked & (TCPCB_LOST|TCPCB_SACKED_ACKED))) {
 		tcp_verify_retransmit_hint(tp, skb);
 
-		set_lost_out(tp, td_lost_out(tp) + tcp_skb_pcount(skb));
+		td_set_lost_out(tp, TCP_SKB_CB(skb)->data_tdn_id,
+				td_get_lost_out(tp, TCP_SKB_CB(skb)->data_tdn_id)
+				+ tcp_skb_pcount(skb));
 		tcp_sum_lost(tp, skb);
 		TCP_SKB_CB(skb)->sacked |= TCPCB_LOST;
 	}
@@ -963,7 +965,9 @@ void tcp_skb_mark_lost_uncond_verify(struct tcp_sock *tp, struct sk_buff *skb)
 
 	tcp_sum_lost(tp, skb);
 	if (!(TCP_SKB_CB(skb)->sacked & (TCPCB_LOST|TCPCB_SACKED_ACKED))) {
-		set_lost_out(tp, td_lost_out(tp) + tcp_skb_pcount(skb));
+		td_set_lost_out(tp, TCP_SKB_CB(skb)->data_tdn_id,
+				td_get_lost_out(tp, TCP_SKB_CB(skb)->data_tdn_id)
+				+ tcp_skb_pcount(skb));
 		TCP_SKB_CB(skb)->sacked |= TCPCB_LOST;
 	}
 }
