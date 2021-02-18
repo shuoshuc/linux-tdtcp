@@ -1043,6 +1043,11 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	/* contains the data we need to submit to TDN updater work queue. */
 	struct tdn_work_data *data;
 
+	/* The receiver only performs TDTCP handshake to enable the sender, but
+	 * does not react to TDN change itself.
+	 */
+	if (!IS_ENABLED(CONFIG_TDTCP_DEV)) return true;
+
 	net = dev_net(skb_dst(skb)->dev);
 	icmph = icmp_hdr(skb);
 
