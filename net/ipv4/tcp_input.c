@@ -5954,7 +5954,7 @@ void tcp_init_transfer(struct sock *sk, int bpf_op)
 	 * initRTO, we only reset cwnd when more than 1 SYN/SYN-ACK
 	 * retransmission has occurred.
 	 */
-	if (td_total_retrans(tp) > 1 && td_undo_marker(tp))
+	if (tp->total_retrans > 1 && td_undo_marker(tp))
 		set_cwnd(tp, 1);
 	else
 		set_cwnd(tp, tcp_init_cwnd(tp, __sk_dst_get(sk)));
@@ -6016,7 +6016,7 @@ static bool tcp_rcv_fastopen_synack(struct sock *sk, struct sk_buff *synack,
 	if (!tp->syn_fastopen) {
 		/* Ignore an unsolicited cookie */
 		cookie->len = -1;
-	} else if (td_total_retrans(tp)) {
+	} else if (tp->total_retrans) {
 		/* SYN timed out and the SYN-ACK neither has a cookie nor
 		 * acknowledges data. Presumably the remote received only
 		 * the retransmitted (regular) SYNs: either the original
@@ -6034,7 +6034,7 @@ static bool tcp_rcv_fastopen_synack(struct sock *sk, struct sk_buff *synack,
 	tcp_fastopen_cache_set(sk, mss, cookie, syn_drop, try_exp);
 
 	if (data) { /* Retransmit unacked data in SYN */
-		if (td_total_retrans(tp))
+		if (tp->total_retrans)
 			tp->fastopen_client_fail = TFO_SYN_RETRANSMITTED;
 		else
 			tp->fastopen_client_fail = TFO_DATA_NOT_ACKED;

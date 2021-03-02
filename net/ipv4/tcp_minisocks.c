@@ -567,7 +567,6 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 			WRITE_ONCE(TD_NXT(newtp, i), seq);
 			WRITE_ONCE(TD_PREV_UNA(newtp, i), seq);
 			WRITE_ONCE(TD_PREV_NXT(newtp, i), seq);
-			WRITE_ONCE(TD_TOTAL_RETRANS(newtp, i), req->num_retrans);
 			WRITE_ONCE(TD_RETRANS_STAMP(newtp, i),
 				   div_u64(treq->snt_synack,
 					   USEC_PER_SEC / TCP_TS_HZ));

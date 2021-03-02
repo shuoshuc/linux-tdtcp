@@ -2755,7 +2755,6 @@ int tcp_disconnect(struct sock *sk, int flags)
 		     tdn++) {
 			TD_RETRANS_OUT(tp, tdn) = 0;
 			TD_SACKED_OUT(tp, tdn) = 0;
-			TD_TOTAL_RETRANS(tp, tdn) = 0;
 		}
 	}
 	tp->tlp_high_seq = 0;
@@ -3507,7 +3506,7 @@ void tcp_get_info(struct sock *sk, struct tcp_info *info)
 	info->tcpi_rcv_rtt = tp->rcv_rtt_est.rtt_us >> 3;
 	info->tcpi_rcv_space = tp->rcvq_space.space;
 
-	info->tcpi_total_retrans = td_total_retrans(tp);
+	info->tcpi_total_retrans = tp->total_retrans;
 
 	info->tcpi_bytes_acked = tp->bytes_acked;
 	info->tcpi_bytes_received = tp->bytes_received;
@@ -3590,7 +3589,7 @@ struct sk_buff *tcp_get_timestamping_opt_stats(const struct sock *sk)
 	nla_put_u64_64bit(stats, TCP_NLA_DATA_SEGS_OUT,
 			  tp->data_segs_out, TCP_NLA_PAD);
 	nla_put_u64_64bit(stats, TCP_NLA_TOTAL_RETRANS,
-			  td_total_retrans(tp), TCP_NLA_PAD);
+			  tp->total_retrans, TCP_NLA_PAD);
 
 	/* Strip READ_ONCE() because it needs a lvalue not a function return.
 	 * But since this function is just collecting non-critical stats, we do

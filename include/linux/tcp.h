@@ -466,8 +466,6 @@ struct tcp_sock {
 		u32	delivered;
 		/* number of undoable retransmissions. */
 		int	undo_retrans;
-		/* Total retransmits for entire subflow */
-		u32	total_retrans;
 		/* Timestamp of the last retransmit. */
 		u32	retrans_stamp;
 		/* Packet reordering length (default is 3, can change). */

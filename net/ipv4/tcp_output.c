@@ -3116,7 +3116,7 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	TCP_ADD_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS, segs);
 	if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_SYN)
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
-	set_total_retrans(tp, td_total_retrans(tp) + segs);
+	tp->total_retrans += segs;
 	tp->bytes_retrans += skb->len;
 
 	/* make sure skb->data is aligned on arches that require it
@@ -4029,8 +4029,7 @@ int tcp_rtx_synack(const struct sock *sk, struct request_sock *req)
 		__TCP_INC_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS);
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPSYNRETRANS);
 		if (unlikely(tcp_passive_fastopen(sk)))
-			set_total_retrans(tcp_sk(sk),
-					  td_total_retrans(tcp_sk(sk)) + 1);
+			tcp_sk(sk)->total_retrans++;
 		trace_tcp_retransmit_synack(sk, req);
 	}
 	return res;
