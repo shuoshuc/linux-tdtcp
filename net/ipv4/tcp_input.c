@@ -3713,7 +3713,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	u32 ack_seq = TCP_SKB_CB(skb)->seq;
 	u32 ack = TCP_SKB_CB(skb)->ack_seq;
 	int num_dupack = 0;
-	int prior_packets = td_pkts_out(tp);
+	int prior_packets = 0;
 	u32 lost = tp->lost;
 	int rexmit = REXMIT_NONE; /* Flag to (re)transmit to recover losses */
 	u32 prior_fack;
@@ -3829,6 +3829,15 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	sk->sk_err_soft = 0;
 	icsk->icsk_probes_out = 0;
 	tp->rcv_tstamp = tcp_jiffies32;
+
+	/* Since an ACK can acknowledge packets sent in any previous TDN, the
+	 * full processing needs to happen if any TDN has non-zero packets_out.
+	 * Otherwise, it is a true scenario that only minimum book keeping is
+	 * needed.
+	 */
+	for (i = 0; i < num_tdns; i++) {
+		prior_packets += td_get_pkts_out(tp, i);
+	}
 	if (!prior_packets)
 		goto no_queue;
 
