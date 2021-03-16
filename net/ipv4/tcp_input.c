@@ -1720,9 +1720,15 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 	int num_sacks = min(TCP_NUM_SACKS, (ptr[1] - TCPOLEN_SACK_BASE) >> 3);
 	int used_sacks;
 	bool found_dup_sack = false;
-	int i, j;
+	int i, j, k;
+	int pkts_out = 0;
 	int first_sack_index;
 	u8 skb_tdn;
+	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
+	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
+	 * will be automatically redirected to the default ones.
+	 */
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
 
 	state->flag = 0;
 	state->reord = tp->snd_nxt;
@@ -1759,7 +1765,14 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 	if (before(TCP_SKB_CB(ack_skb)->ack_seq, prior_snd_una - tp->max_window))
 		return 0;
 
-	if (!td_pkts_out(tp))
+	/* Since a SACK can acknowledge packets sent in any previous TDN, the
+	 * full processing needs to happen if any TDN has non-zero packets_out.
+	 * Otherwise, it is a true scenario that no processing is required.
+	 */
+	for (k = 0; k < num_tdns; k++) {
+		pkts_out += td_get_pkts_out(tp, k);
+	}
+	if (!pkts_out)
 		goto out;
 
 	used_sacks = 0;
