@@ -1514,6 +1514,11 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 			tcp_adjust_pcount(sk, skb, diff);
 	}
 
+#if IS_ENABLED(CONFIG_TDTCP)
+	/* New SKB split from the original one needs to have the same TDN. */
+	TCP_SKB_CB(buff)->data_tdn_id = TCP_SKB_CB(skb)->data_tdn_id;
+#endif
+
 	/* Link BUFF into the send queue. */
 	__skb_header_release(buff);
 	tcp_insert_write_queue_after(skb, buff, sk, tcp_queue);

@@ -1437,6 +1437,14 @@ int tcp_skb_shift(struct sk_buff *to, struct sk_buff *from,
 		return 0;
 	if (unlikely(tcp_skb_pcount(to) + pcount > 65535))
 		return 0;
+	/* If 2 SKBs have different TDNs and one is already SACKed, it is easier
+	 * to not shift/merge them for correct accounting. Otherwise, we need to
+	 * somehow maintain 2 TDNs in one SKB, which is quite error-prone.
+	 */
+#if IS_ENABLED(CONFIG_TDTCP)
+	if (TCP_SKB_CB(to)->data_tdn_id != TCP_SKB_CB(from)->data_tdn_id)
+		return 0;
+#endif
 	return skb_shift(to, from, shiftlen);
 }
 
