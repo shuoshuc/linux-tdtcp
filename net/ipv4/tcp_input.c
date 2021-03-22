@@ -1104,13 +1104,13 @@ static bool tcp_is_sackblock_valid(struct tcp_sock *tp, bool is_dsack,
 
 static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 			    struct tcp_sack_block_wire *sp, int num_sacks,
-			    u32 prior_snd_una, struct sk_buff **sack0_skb)
+			    u32 prior_snd_una, u8 *dsack_tdn)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 start_seq_0 = get_unaligned_be32(&sp[0].start_seq);
 	u32 end_seq_0 = get_unaligned_be32(&sp[0].end_seq);
 	bool dup_sack = false;
-	struct sk_buff *dsack_skb;
+	struct sk_buff *dsack_skb = NULL;
 	u8 skb_tdn;
 
 	if (before(start_seq_0, TCP_SKB_CB(ack_skb)->ack_seq)) {
@@ -1160,7 +1160,7 @@ static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 		 * corresponding TDN. To save one extra tree walk of the
 		 * rtx_queue, we just pass the SKB we have found back.
 		 */
-		*sack0_skb = dsack_skb;
+		*dsack_tdn = skb_tdn;
 	}
 
 	return dup_sack;
@@ -1724,14 +1724,14 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 	struct tcp_sack_block_wire *sp_wire = (struct tcp_sack_block_wire *)(ptr+2);
 	struct tcp_sack_block sp[TCP_NUM_SACKS];
 	struct tcp_sack_block *cache;
-	struct sk_buff *skb, *sack0_skb;
+	struct sk_buff *skb;
 	int num_sacks = min(TCP_NUM_SACKS, (ptr[1] - TCPOLEN_SACK_BASE) >> 3);
 	int used_sacks;
 	bool found_dup_sack = false;
 	int i, j, k;
 	int pkts_out = 0;
 	int first_sack_index;
-	u8 skb_tdn;
+	u8 skb_tdn = 0xFF;
 	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
 	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
 	 * will be automatically redirected to the default ones.
@@ -1745,21 +1745,21 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 		tcp_highest_sack_reset(sk);
 
 	found_dup_sack = tcp_check_dsack(sk, ack_skb, sp_wire,
-					 num_sacks, prior_snd_una, &sack0_skb);
+					 num_sacks, prior_snd_una, &skb_tdn);
 	if (found_dup_sack) {
 		state->flag |= FLAG_DSACKING_ACK;
 		/* A DSACK means a dup packet has left network, hence increment
 		 * `delivered` by 1. In TDTCP, this should be credited to the
 		 * TDN which the packet belongs to. So we retrieve the SKB via
 		 * a tree walk of rtx_queue, which tcp_check_dsack() kindly does
-		 * for us. sack0_skb points to the SKB we are looking for, it is
-		 * the SKB that SACK block 0 is SACKing (SACK[0] is DSACK when
-		 * found_dup_sack == true). If SKB is not found (e.g., already
-		 * been removed), we should just skip and not try to incorrectly
-		 * credit to the current TDN.
+		 * for us. skb_tdn is the TDN ID which the DSACK block (SACK[0]
+		 * is DSACK when found_dup_sack == true) acks. If no qualified
+		 * SKB is found (e.g., already been removed) for the DSACK, we
+		 * should just skip and not try to incorrectly credit to the
+		 * current TDN. 0xFF here is a "special" value being treated as
+		 * invalid, we do not expect to see so many valid TDNs.
 		 */
-		if (sack0_skb) {
-			skb_tdn = TCP_SKB_CB(sack0_skb)->data_tdn_id;
+		if (skb_tdn != 0xFF) {
 			/* A spurious retransmission is delivered */
 			td_set_delivered(tp, skb_tdn,
 					 td_get_delivered(tp, skb_tdn) + 1);

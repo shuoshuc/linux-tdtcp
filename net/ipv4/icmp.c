@@ -1134,6 +1134,11 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				 * sock lock to perform a safe update.
 				 */
 				data = kmalloc(sizeof(struct tdn_work_data), GFP_ATOMIC);
+				if (!data) {
+					pr_debug("icmp_active_tdn_id(): kmalloc failed. "
+						 "set tdn_id=%u on sk=%p.", tdn_id, sk);
+					goto out_err;
+				}
 				data->sk = sk;
 				data->tdn_id = tdn_id;
 				INIT_WORK(&data->tdn_work, tdn_update_handler);
@@ -1141,7 +1146,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
 					 "on sk=%p, dispatched to workqueue.",
-					 tp->curr_tdn_id, sk);
+					 tdn_id, sk);
 				pr_debug("[post-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
 					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
 					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
