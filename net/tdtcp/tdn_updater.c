@@ -17,7 +17,6 @@ EXPORT_SYMBOL(tdn_updater_wq);
 
 void tdn_update_handler(struct work_struct *work)
 {
-	ktime_t start, end;
 	struct tdn_work_data *data = container_of(work, struct tdn_work_data,
 						  tdn_work);
 	WARN_ON(!data);
@@ -26,18 +25,11 @@ void tdn_update_handler(struct work_struct *work)
 	if (data->tdn_id == READ_ONCE(tcp_sk(data->sk)->curr_tdn_id))
 		goto free;
 
-	pr_debug("[%s] sk=%p, tdn=%u. Acquiring lock.\n",
-		 __FUNCTION__, data->sk, data->tdn_id);
-
-	start = ktime_get();
 	lock_sock(data->sk);
 	WRITE_ONCE(tcp_sk(data->sk)->curr_tdn_id, data->tdn_id);
+	pr_debug("[%s] %llu ns since epoch. sk=%p, tdn=%u.\n",
+		 __FUNCTION__, ktime_get_real_fast_ns(), data->sk, data->tdn_id);
 	release_sock(data->sk);
-        end = ktime_get();
-
-	pr_debug("[%s] sk=%p, tdn=%u. Lock released. Took %lld usec.\n",
-		 __FUNCTION__, data->sk, data->tdn_id,
-		 (long long)ktime_to_us(ktime_sub(end, start)));
 
 free:
 	kfree(data);
