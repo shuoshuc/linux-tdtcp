@@ -1359,14 +1359,15 @@ static void tcp_set_skb_tso_segs(struct sk_buff *skb, unsigned int mss_now)
 static void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int decr)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	u8 skb_tdn = TCP_SKB_CB(skb)->data_tdn_id;
+	u8 skb_tdn = sk_is_tdtcp(sk) ? TCP_SKB_CB(skb)->data_tdn_id : 0;
+	u8 retx_tdn = sk_is_tdtcp(sk) ? TCP_SKB_CB(skb)->retx_tdn_id : 0;
 
 	td_set_pkts_out(tp, skb_tdn, td_get_pkts_out(tp, skb_tdn) - decr);
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
 		td_set_sacked_out(tp, skb_tdn, td_get_sacked_out(tp, skb_tdn) - decr);
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS)
-		td_set_retrans_out(tp, skb_tdn, td_get_retrans_out(tp, skb_tdn) - decr);
+		td_set_retrans_out(tp, retx_tdn, td_get_retrans_out(tp, retx_tdn) - decr);
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_LOST)
 		td_set_lost_out(tp, skb_tdn, td_get_lost_out(tp, skb_tdn) - decr);
 
@@ -1507,6 +1508,7 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 #if IS_ENABLED(CONFIG_TDTCP)
 	/* New SKB split from the original one needs to have the same TDN. */
 	TCP_SKB_CB(buff)->data_tdn_id = TCP_SKB_CB(skb)->data_tdn_id;
+	TCP_SKB_CB(buff)->retx_tdn_id = TCP_SKB_CB(skb)->retx_tdn_id;
 #endif
 
 	/* If this packet has been sent out already, we must
@@ -3125,6 +3127,10 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	tp->total_retrans += segs;
 	tp->bytes_retrans += skb->len;
 
+	/* Update `retx_tdn_id` now before TDTCP header is constructed. */
+	if (sk_is_tdtcp(sk))
+		TCP_SKB_CB(skb)->retx_tdn_id = tp->curr_tdn_id;
+
 	/* make sure skb->data is aligned on arches that require it
 	 * and check if ack-trimming & collapsing extended the headroom
 	 * beyond what csum_start can cover.
@@ -3172,6 +3178,7 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	int err = __tcp_retransmit_skb(sk, skb, segs);
+	u8 retx_tdn = sk_is_tdtcp(sk) ? TCP_SKB_CB(skb)->retx_tdn_id : 0;
 
 	if (err == 0) {
 #if FASTRETRANS_DEBUG > 0
@@ -3180,7 +3187,8 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 		}
 #endif
 		TCP_SKB_CB(skb)->sacked |= TCPCB_RETRANS;
-		set_retrans_out(tp, td_retrans_out(tp) + tcp_skb_pcount(skb));
+		td_set_retrans_out(tp, retx_tdn,
+				   td_get_retrans_out(tp, retx_tdn) + tcp_skb_pcount(skb));
 	}
 
 	/* Save stamp of the first (attempted) retransmit. */

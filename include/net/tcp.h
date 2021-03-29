@@ -889,6 +889,7 @@ struct tcp_skb_cb {
 #if IS_ENABLED(CONFIG_TDTCP)
 	__u8		tdtcp_flags;	/* TD_DA subtype flags */
 	__u8		data_tdn_id;	/* TDN ID this SKB corresponds to */
+	__u8		retx_tdn_id;	/* TDN ID this SKB is retransmitted on */
 	__u8		ack_tdn_id;	/* TDN ID which the ack is for */
 #endif
 };

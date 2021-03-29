@@ -5,12 +5,14 @@
 void tcp_mark_skb_lost(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	u8 retx_tdn = sk_is_tdtcp(sk) ? TCP_SKB_CB(skb)->retx_tdn_id : 0;
 
 	tcp_skb_mark_lost_uncond_verify(tp, skb);
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
 		/* Account for retransmits that are lost again */
 		TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
-		set_retrans_out(tp, td_retrans_out(tp) - tcp_skb_pcount(skb));
+		td_set_retrans_out(tp, retx_tdn,
+			td_get_retrans_out(tp, retx_tdn) - tcp_skb_pcount(skb));
 		NET_ADD_STATS(sock_net(sk), LINUX_MIB_TCPLOSTRETRANSMIT,
 			      tcp_skb_pcount(skb));
 	}

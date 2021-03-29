@@ -1240,7 +1240,7 @@ static u8 tcp_sacktag_one(struct sock *sk,
 			  struct tcp_sacktag_state *state, u8 sacked,
 			  u32 start_seq, u32 end_seq,
 			  int dup_sack, int pcount,
-			  u64 xmit_time, u8 skb_tdn)
+			  u64 xmit_time, u8 skb_tdn, u8 retx_tdn)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
@@ -1272,8 +1272,8 @@ static u8 tcp_sacktag_one(struct sock *sk,
 				sacked &= ~(TCPCB_LOST|TCPCB_SACKED_RETRANS);
 				td_set_lost_out(tp, skb_tdn,
 					td_get_lost_out(tp, skb_tdn) - pcount);
-				td_set_retrans_out(tp, skb_tdn,
-					td_get_retrans_out(tp, skb_tdn) - pcount);
+				td_set_retrans_out(tp, retx_tdn,
+					td_get_retrans_out(tp, retx_tdn) - pcount);
 			}
 		} else {
 			if (!(sacked & TCPCB_RETRANS)) {
@@ -1319,8 +1319,8 @@ static u8 tcp_sacktag_one(struct sock *sk,
 	 */
 	if (dup_sack && (sacked & TCPCB_SACKED_RETRANS)) {
 		sacked &= ~TCPCB_SACKED_RETRANS;
-		td_set_retrans_out(tp, skb_tdn,
-				   td_get_retrans_out(tp, skb_tdn) - pcount);
+		td_set_retrans_out(tp, retx_tdn,
+				   td_get_retrans_out(tp, retx_tdn) - pcount);
 	}
 
 	return sacked;
@@ -1349,7 +1349,8 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *prev,
 	 */
 	tcp_sacktag_one(sk, state, TCP_SKB_CB(skb)->sacked,
 			start_seq, end_seq, dup_sack, pcount,
-			tcp_skb_timestamp_us(skb), TCP_SKB_CB(skb)->data_tdn_id);
+			tcp_skb_timestamp_us(skb), TCP_SKB_CB(skb)->data_tdn_id,
+			TCP_SKB_CB(skb)->retx_tdn_id);
 	tcp_rate_skb_delivered(sk, skb, state->rate);
 
 	if (skb == tp->lost_skb_hint)
@@ -1647,7 +1648,8 @@ static struct sk_buff *tcp_sacktag_walk(struct sk_buff *skb, struct sock *sk,
 						dup_sack,
 						tcp_skb_pcount(skb),
 						tcp_skb_timestamp_us(skb),
-						TCP_SKB_CB(skb)->data_tdn_id);
+						TCP_SKB_CB(skb)->data_tdn_id,
+						TCP_SKB_CB(skb)->retx_tdn_id);
 			tcp_rate_skb_delivered(sk, skb, state->rate);
 			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
 				list_del_init(&skb->tcp_tsorted_anchor);
@@ -2687,14 +2689,17 @@ void tcp_simple_retransmit(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *skb;
 	unsigned int mss = tcp_current_mss(sk);
+	u8 retx_tdn;
 
 	skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
 		if (tcp_skb_seglen(skb) > mss &&
 		    !(TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)) {
 			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
 				TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
-				set_retrans_out(tp, td_retrans_out(tp) -
-						tcp_skb_pcount(skb));
+				retx_tdn = sk_is_tdtcp(sk) ?
+					TCP_SKB_CB(skb)->retx_tdn_id : 0;
+				td_set_retrans_out(tp, retx_tdn,
+					td_get_retrans_out(tp, retx_tdn) - tcp_skb_pcount(skb));
 			}
 			tcp_skb_mark_lost_uncond_verify(tp, skb);
 		}
@@ -3211,6 +3216,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 	int flag = 0;
 	/* If failing to get data_tdn_id from SKB, fallback to curr_tdn_id. */
 	u8 skb_tdn = tp->curr_tdn_id;
+	u8 retx_tdn = tp->curr_tdn_id;
 
 	first_ackt = 0;
 
@@ -3239,12 +3245,8 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 
 		if (unlikely(sacked & TCPCB_RETRANS)) {
 			if (sacked & TCPCB_SACKED_RETRANS)
-				/* TODO: Tx and Retx skb might not take the same
-				 * TDN path, hence need to distinguish what one
-				 * is ACK acking, and credit accordingly.
-				 */
-				td_set_retrans_out(tp, skb_tdn,
-					td_get_retrans_out(tp, skb_tdn) - acked_pcount);
+				td_set_retrans_out(tp, retx_tdn,
+					td_get_retrans_out(tp, retx_tdn) - acked_pcount);
 			flag |= FLAG_RETRANS_DATA_ACKED;
 		} else if (!(sacked & TCPCB_SACKED_ACKED)) {
 			last_ackt = tcp_skb_timestamp_us(skb);
