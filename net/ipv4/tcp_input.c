@@ -3226,6 +3226,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 		u8 sacked = scb->sacked;
 		u32 acked_pcount;
 		skb_tdn = scb->data_tdn_id;
+		retx_tdn = scb->retx_tdn_id;
 
 		tcp_ack_tstamp(sk, skb, prior_snd_una);
 
