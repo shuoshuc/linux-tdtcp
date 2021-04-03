@@ -1345,6 +1345,13 @@ static struct ctl_table ipv4_net_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= SYSCTL_ONE
 	},
+	{
+		.procname	= "tcp_tdn_change",
+		.data		= &init_net.ipv4.sysctl_tcp_tdn_change,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
 	{ }
 };
 
