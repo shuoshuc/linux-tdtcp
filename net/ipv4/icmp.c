@@ -1048,14 +1048,14 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	 * disabled on the receiver.)
 	 */
 	if (!IS_ENABLED(CONFIG_TDTCP_DEV)) return true;
-	/* Runtime sysctl/procfs knob to enable or disable reaction to TDN
-	 * changes.
-	 */
-	if (!sock_net(sk)->ipv4.sysctl_tcp_tdn_change) return true;
 
 	net = dev_net(skb_dst(skb)->dev);
-	icmph = icmp_hdr(skb);
+	/* Runtime sysctl/procfs knob to enable or disable reaction to TDN
+	 * changes. CONFIG_TDTCP_DEV always takes precedence.
+	 */
+	if (!net->ipv4.sysctl_tcp_tdn_change) return true;
 
+	icmph = icmp_hdr(skb);
 	/* ICMP type mismatching, drop. */
 	if (icmph->type != ICMP_ACTIVE_TDN_ID)
 		goto out_err;
