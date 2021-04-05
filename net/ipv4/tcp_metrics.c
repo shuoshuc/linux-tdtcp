@@ -398,7 +398,7 @@ void tcp_update_metrics(struct sock *sk)
 				tcp_metric_set(tm, TCP_METRIC_CWND,
 					       tp->snd_cwnd);
 		}
-	} else if (!tcp_in_slow_start(tp, tp->curr_tdn_id) &&
+	} else if (!tcp_in_slow_start(tp, GET_TDN(tp)) &&
 		   td_ca_state(sk) == TCP_CA_Open) {
 		/* Cong. avoidance phase, cwnd is reliable. */
 		if (!net->ipv4.sysctl_tcp_no_ssthresh_metrics_save &&

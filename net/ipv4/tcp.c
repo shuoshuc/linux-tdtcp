@@ -3358,7 +3358,8 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 				 val, tp->num_tdns);
 			err = -EINVAL;
 		} else {
-			tp->curr_tdn_id = val;
+			//tp->curr_tdn_id = val;
+			SET_TDN(tp, val);
 		}
 		break;
 #endif

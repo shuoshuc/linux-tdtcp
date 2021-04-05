@@ -88,6 +88,7 @@
 #include <linux/timer.h>
 #include <linux/init.h>
 #include <linux/uaccess.h>
+#include <linux/time.h>
 #include <net/checksum.h>
 #include <net/xfrm.h>
 #include <net/inet_common.h>
@@ -95,6 +96,7 @@
 #include <net/l3mdev.h>
 
 extern struct workqueue_struct *tdn_updater_wq;
+extern u8 global_tdn_id;
 
 /*
  *	Build xmit assembly blocks
@@ -1039,7 +1041,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	const struct hlist_nulls_node *node;
 	unsigned int i;
 	/* 0 is a valid TDN ID, so use 0xFF for init. */
-	u8 curr_tdn_id, tdn_id = 0xFF;
+	u8 tdn_id = 0xFF, prev_tdn;
 	/* contains the data we need to submit to TDN updater work queue. */
 	struct tdn_work_data *data;
 
@@ -1066,9 +1068,7 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	/* No network order to host order conversion for a single byte. */
 	tdn_id = icmph->un.active_tdn.id;
 
-	pr_debug("icmp_active_tdn_id(): set curr_tdn_id=%u on all TDTCP "
-		 "sockets.", tdn_id);
-
+#if IS_ENABLED(CONFIG_PER_SOCK_TDN)
 	/* Go through all TDTCP enabled sockets in tcp_hashinfo.ehash, i.e., in
 	 * ESTABLISHED state, and change their curr_tdn_id. ehash could be a
 	 * very large hashtable when there are many TCP connections, but we go
@@ -1092,48 +1092,6 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 					 " new curr_tdn_id=%u, num_tdns=%u on "
 					 "sk=%p.", tdn_id, tp->num_tdns, sk);
 			} else {
-				pr_debug("[pre-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
-					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
-					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
-					 td_cwnd(tp), tp->rcv_wnd, tp->snd_wnd);
-
-				// curr_tdn_id = READ_ONCE(tp->curr_tdn_id);
-
-				/* If prev_snd_una != prev_snd_nxt, that means
-				 * tdn_id's window from 2 cycles ago is still
-				 * not closed. This indicates that TDNs switch
-				 * too fast, which is a scenario we do not yet
-				 * want to support. If this happens, we log key
-				 * info and stack trace then kill the process.
-				 * Because there is a good chance that TDTCP
-				 * engine will not function correctly.
-				 */
-				/*
-				if (TD_PREV_UNA(tp, tdn_id) !=
-				    TD_PREV_NXT(tp, tdn_id)) {
-					pr_debug("ICMP TDN change: tdn_id=%u "
-						 "on sk=%p, prev_snd_una (%u) "
-						 "!= prev_snd_nxt (%u).",
-						 tp->curr_tdn_id, sk,
-						 TD_PREV_UNA(tp, tdn_id),
-						 TD_PREV_NXT(tp, tdn_id));
-					BUG_ON(TD_PREV_UNA(tp, tdn_id) !=
-					       TD_PREV_NXT(tp, tdn_id));
-				}
-				*/
-
-				/* Open up a new window for tdn_id, starting
-				 * from snd_nxt of curr_tdn_id. Roll snd_una and
-				 * snd_nxt of tdn_id (the previous window) over
-				 * to prev_snd_una and prev_snd_nxt.
-				 */
-				// TD_PREV_UNA(tp, tdn_id) = TD_UNA(tp, tdn_id);
-				// TD_PREV_NXT(tp, tdn_id) = TD_NXT(tp, tdn_id);
-				// TD_UNA(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
-				// TD_NXT(tp, tdn_id) = TD_NXT(tp, curr_tdn_id);
-
-				//WRITE_ONCE(tp->curr_tdn_id, tdn_id);
-
 				/* Submit the actual TDN update work to work
 				 * queue, so that it can block and acquire the
 				 * sock lock to perform a safe update.
@@ -1152,13 +1110,16 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 				pr_debug("icmp_active_tdn_id(): set tdn_id=%u "
 					 "on sk=%p, dispatched to workqueue.",
 					 tdn_id, sk);
-				pr_debug("[post-TDN-change]: sk=%p, curr_tdn=%u, snd_una=%u, "
-					 "snd_nxt=%u, snd_cwnd=%u, rcv_wnd=%u, snd_wnd=%u.",
-					 sk, tp->curr_tdn_id, tp->snd_una, tp->snd_nxt,
-					 td_cwnd(tp), tp->rcv_wnd, tp->snd_wnd);
 			}
 		}
 	}
+#else
+	prev_tdn = GET_TDN(tp);
+	SET_TDN(tp, tdn_id);
+	pr_debug("icmp_active_tdn_id(): curr_tdn_id:%u->%u, %llu ns since epoch.\n",
+		 prev_tdn, GET_TDN(tp), ktime_get_real_fast_ns());
+#endif
+
 	return true;
 
 out_err:

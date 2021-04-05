@@ -2926,7 +2926,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 				pr_debug("tcp_fastretrans_alert(): sk=%p, tdn=%u, ca_state %u->%u, "
 					 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 					 "snd_una=%u, high_seq=%u.\n",
-					 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
+					 sk, GET_TDN(tp), prev_ca_state, td_ca_state(sk),
 					 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
 					 tcp_packets_in_flight(tp), snd_una, high_seq);
 			}
@@ -2943,7 +2943,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 				 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 				 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
 				 "snd_una=%u, high_seq=%u.\n",
-				 sk, tp->curr_tdn_id, prev_ca_state, td_ca_state(sk),
+				 sk, GET_TDN(tp), prev_ca_state, td_ca_state(sk),
 				 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
 				 tcp_packets_in_flight(tp), td_pkts_out(tp),
 				 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
@@ -3019,7 +3019,7 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 			 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
 			 "snd_una=%u, high_seq=%u.\n",
-			 sk, tp->curr_tdn_id, prev_ca_state2, td_ca_state(sk),
+			 sk, GET_TDN(tp), prev_ca_state2, td_ca_state(sk),
 			 prev_cwnd2, td_cwnd(tp), prev_ssthresh2, td_ssthresh(tp),
 			 tcp_packets_in_flight(tp), td_pkts_out(tp),
 			 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
@@ -3215,8 +3215,8 @@ static int tcp_clean_rtx_queue(struct sock *sk, u32 prior_fack,
 	bool rtt_update;
 	int flag = 0;
 	/* If failing to get data_tdn_id from SKB, fallback to curr_tdn_id. */
-	u8 skb_tdn = tp->curr_tdn_id;
-	u8 retx_tdn = tp->curr_tdn_id;
+	u8 skb_tdn = GET_TDN(tp);
+	u8 retx_tdn = GET_TDN(tp);
 
 	first_ackt = 0;
 
@@ -3747,7 +3747,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	 * will be automatically redirected to the default ones.
 	 */
 	u8 i, num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
-	u8 curr_tdn = IS_ENABLED(CONFIG_TDTCP) ? tp->curr_tdn_id : 0;
+	u8 curr_tdn = IS_ENABLED(CONFIG_TDTCP) ? GET_TDN(tp) : 0;
 	/* If TDTCP is not enabled, the default tp->delivered is stored in entry
 	 * 0 of the array. The rest entries should be 0 and never used.
 	 */
@@ -6538,7 +6538,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 
 		if (!inet_csk(sk)->icsk_ca_ops->cong_control)
-			tcp_update_pacing_rate(sk, tp->curr_tdn_id);
+			tcp_update_pacing_rate(sk, GET_TDN(tp));
 
 		/* Prevent spurious tcp_cwnd_restart() on first data packet */
 		tp->lsndtime = tcp_jiffies32;

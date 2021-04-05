@@ -15,3 +15,10 @@ config TDTCP_DEV
 	default y
 	help
 	  Decides whether the dev features of TDTCP are enabled.
+
+config PER_SOCK_TDN
+	bool "Per-socket TDN ID"
+	depends on TDTCP
+	default y
+	help
+	  Each socket has its own current TDN ID associated when enabled.

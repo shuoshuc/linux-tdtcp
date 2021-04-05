@@ -15,6 +15,9 @@ MODULE_LICENSE("GPL");
 struct workqueue_struct *tdn_updater_wq;
 EXPORT_SYMBOL(tdn_updater_wq);
 
+u8 global_tdn_id;
+EXPORT_SYMBOL(global_tdn_id);
+
 void tdn_update_handler(struct work_struct *work)
 {
 	struct tdn_work_data *data = container_of(work, struct tdn_work_data,
@@ -22,11 +25,11 @@ void tdn_update_handler(struct work_struct *work)
 	WARN_ON(!data);
 	WARN_ON(!data->sk);
 	/* No need to set same TDN again. This saves locking overhead. */
-	if (data->tdn_id == READ_ONCE(tcp_sk(data->sk)->curr_tdn_id))
+	if (data->tdn_id == GET_TDN(tcp_sk(data->sk)))
 		goto free;
 
 	lock_sock(data->sk);
-	WRITE_ONCE(tcp_sk(data->sk)->curr_tdn_id, data->tdn_id);
+	SET_TDN(tcp_sk(data->sk), data->tdn_id);
 	pr_debug("[%s] %llu ns since epoch. sk=%p, tdn=%u.\n",
 		 __FUNCTION__, ktime_get_real_fast_ns(), data->sk, data->tdn_id);
 	release_sock(data->sk);

@@ -1302,7 +1302,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		pr_debug("tcp_transmit_skb(): sk=%p, tdn=%u, ca_state %u->%u, "
 			 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 			 "snd_una=%u, high_seq=%u, err=%u.",
-			 sk, tp->curr_tdn_id, prev_state, td_ca_state(sk),
+			 sk, GET_TDN(tp), prev_state, td_ca_state(sk),
 			 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
 			 tcp_packets_in_flight(tp), tp->snd_una, td_high_seq(tp),
 			 err);
@@ -1794,7 +1794,7 @@ static void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 		set_cwnd_limited(tp, is_cwnd_limited);
 	}
 
-	if (tcp_is_cwnd_limited(sk, tp->curr_tdn_id)) {
+	if (tcp_is_cwnd_limited(sk, GET_TDN(tp))) {
 		/* Network is feed fully. */
 		set_cwnd_used(tp, 0);
 		set_cwnd_stamp(tp, tcp_jiffies32);
@@ -2622,7 +2622,7 @@ repair:
 		pr_debug("[write xmit] sk=%p, tdn=%u, snd_cwnd=%u, cc_state=%u, "
 			 "sent_pkts=%u, pkts_in_flight=%u, pkts_out=%u, "
 			 "sacked_out=%u, lost_out=%u, retrans_out=%u.",
-			 sk, tp->curr_tdn_id, td_cwnd(tp), td_ca_state(sk),
+			 sk, GET_TDN(tp), td_cwnd(tp), td_ca_state(sk),
 			 sent_pkts, tcp_packets_in_flight(tp), td_pkts_out(tp),
 			 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp));
 	}
@@ -3129,7 +3129,7 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 
 	/* Update `retx_tdn_id` now before TDTCP header is constructed. */
 	if (sk_is_tdtcp(sk))
-		TCP_SKB_CB(skb)->retx_tdn_id = tp->curr_tdn_id;
+		TCP_SKB_CB(skb)->retx_tdn_id = GET_TDN(tp);
 
 	/* make sure skb->data is aligned on arches that require it
 	 * and check if ack-trimming & collapsing extended the headroom
