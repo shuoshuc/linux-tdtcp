@@ -676,6 +676,13 @@ config TCP_CONG_TDTCP_RENO
 
 	  TDTCP Reno is TCP Reno CCA customized for TDTCP.
 
+config TCP_CONG_TDTCP_CUBIC
+	tristate "TDTCP CUBIC"
+	default n
+	help
+
+	  TDTCP CUBIC is TCP CUBIC CCA customized for TDTCP.
+
 choice
 	prompt "Default TCP congestion control"
 	default DEFAULT_TDTCP_RENO
@@ -715,6 +722,9 @@ choice
 
 	config DEFAULT_TDTCP_RENO
 		bool "TDTCP_Reno" if TCP_CONG_TDTCP_RENO=y
+
+	config DEFAULT_TDTCP_CUBIC
+		bool "TDTCP_CUBIC" if TCP_CONG_TDTCP_CUBIC=y
 
 	config DEFAULT_RENO
 		bool "Reno"

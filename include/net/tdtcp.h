@@ -467,11 +467,25 @@ static inline u32 td_prior_ssthresh(const struct tcp_sock *tp)
 		TD_PRIOR_SSTHRESH(tp, GET_TDN(tp)) : tp->prior_ssthresh;
 }
 
+/* Return prior_ssthresh of given TDN or the default variable value. */
+static inline u32 td_get_prior_ssthresh(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_PRIOR_SSTHRESH(tp, tdn_id) : tp->prior_ssthresh;
+}
+
 /* Assign val to prior_ssthresh of current TDN or the default variable. */
 static inline void set_prior_ssthresh(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRIOR_SSTHRESH(tp, GET_TDN(tp)) : &tp->prior_ssthresh) = val;
+}
+
+/* Assign val to prior_ssthresh of given TDN or the default variable. */
+static inline void td_set_prior_ssthresh(struct tcp_sock *tp, u32 val, u8 tdn_id)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_PRIOR_SSTHRESH(tp, tdn_id) : &tp->prior_ssthresh) = val;
 }
 
 /* Return snd_cnwd_cnt of current TDN or the default variable value. */

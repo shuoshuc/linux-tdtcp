@@ -177,8 +177,11 @@ void tcp_assign_congestion_control(struct sock *sk)
 void tcp_init_congestion_control(struct sock *sk)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
+	int i;
 
-	set_prior_ssthresh(tcp_sk(sk), 0);
+	for (i = 0; i < MAX_NUM_TDNS; i++) {
+		td_set_prior_ssthresh(tcp_sk(sk), 0, i);
+	}
 	if (icsk->icsk_ca_ops->init)
 		icsk->icsk_ca_ops->init(sk);
 	if (tcp_ca_needs_ecn(sk))
@@ -412,6 +415,17 @@ u32 tcp_slow_start(struct tcp_sock *tp, u32 acked)
 }
 EXPORT_SYMBOL_GPL(tcp_slow_start);
 
+u32 tdtcp_slow_start(struct tcp_sock *tp, u32 acked, u8 tdn)
+{
+	u32 cwnd = min(td_get_cwnd(tp, tdn) + acked, td_get_ssthresh(tp, tdn));
+
+	acked -= cwnd - td_get_cwnd(tp, tdn);
+	td_set_cwnd(tp, min(cwnd, tp->snd_cwnd_clamp), tdn);
+
+	return acked;
+}
+EXPORT_SYMBOL_GPL(tdtcp_slow_start);
+
 /* In theory this is tp->snd_cwnd += 1 / tp->snd_cwnd (or alternative w),
  * for every packet that was ACKed.
  */
@@ -433,6 +447,25 @@ void tcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked)
 	set_cwnd(tp, min(td_cwnd(tp), tp->snd_cwnd_clamp));
 }
 EXPORT_SYMBOL_GPL(tcp_cong_avoid_ai);
+
+void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked, u8 tdn)
+{
+	/* If credits accumulated at a higher w, apply them gently now. */
+	if (td_get_cwnd_cnt(tp, tdn) >= w) {
+		td_set_cwnd_cnt(tp, 0, tdn);
+		td_set_cwnd(tp, td_get_cwnd(tp, tdn) + 1, tdn);
+	}
+
+	td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn) + acked, tdn);
+	if (td_get_cwnd_cnt(tp, tdn) >= w) {
+		u32 delta = td_get_cwnd_cnt(tp, tdn) / w;
+
+		td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn) - delta * w, tdn);
+		td_set_cwnd(tp, td_get_cwnd(tp, tdn) + delta, tdn);
+	}
+	td_set_cwnd(tp, min(td_get_cwnd(tp, tdn), tp->snd_cwnd_clamp), tdn);
+}
+EXPORT_SYMBOL_GPL(tdtcp_cong_avoid_ai);
 
 /*
  * TCP Reno congestion control

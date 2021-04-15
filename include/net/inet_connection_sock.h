@@ -135,7 +135,7 @@ struct inet_connection_sock {
 	} icsk_mtup;
 	u32			  icsk_user_timeout;
 
-	u64			  icsk_ca_priv[104 / sizeof(u64)];
+	u64			  icsk_ca_priv[104 / sizeof(u64) * MAX_NUM_TDNS];
 
 #if IS_ENABLED(CONFIG_TDTCP)
 	struct tdtcp_inet_subflow {
@@ -148,7 +148,7 @@ struct inet_connection_sock {
 	} td_subf[MAX_NUM_TDNS];
 #endif
 
-#define ICSK_CA_PRIV_SIZE      (13 * sizeof(u64))
+#define ICSK_CA_PRIV_SIZE      (13 * sizeof(u64) * MAX_NUM_TDNS)
 };
 
 #define ICSK_TIME_RETRANS	1	/* Retransmit timer */
