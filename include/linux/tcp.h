@@ -408,9 +408,13 @@ struct tcp_sock {
 	bool	is_tdtcp; /* Whether the socket is TDTCP enabled. */
 	u8	num_tdns; /* Number of TDNs both sides agree on.  */
 	u8	peer_num_tdns; /* peer claimed # TDNs             */
-#if IS_ENABLED(CONFIG_PER_SOCK_TDN)
+
+	/* FLASEW_XXX: in the case where socket TDN is pulled from global TDN
+	 * on lock, we still need a per socket space to store it
+	 */
+	/* #if IS_ENABLED(CONFIG_PER_SOCK_TDN) */
 	u8	curr_tdn_id; /* current TDN id the socket is seeing. */
-#endif
+    /* #endif */
 
 	/* Array of TDTCP subflows, each contains the subflow sequence number
 	 * and congestion control information. Indexed by the current TDN ID.
