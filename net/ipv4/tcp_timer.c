@@ -629,6 +629,12 @@ static void tcp_write_timer(struct timer_list *t)
 	struct sock *sk = &icsk->icsk_inet.sk;
 
 	bh_lock_sock(sk);
+	/*
+	 * FLASEW_XXX: update TDN on timeout operations 
+	 */
+#if IS_ENABLED(CONFIG_TDTCP) && !IS_ENABLED(CONFIG_PER_SOCK_TDN)
+		SET_SOCK_TDN(tcp_sk(sk));
+#endif
 	if (!sock_owned_by_user(sk)) {
 		tcp_write_timer_handler(sk);
 	} else {

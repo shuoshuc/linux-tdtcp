@@ -1628,6 +1628,13 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 	struct sock *rsk;
 
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
+		/* 
+		* FLASEW_XXX: this should be all the receive's entrence, update 
+		* global TDN here
+		*/
+#if IS_ENABLED(CONFIG_TDTCP) && !IS_ENABLED(CONFIG_PER_SOCK_TDN)
+		SET_SOCK_TDN(tcp_sk(sk));
+#endif
 		struct dst_entry *dst = sk->sk_rx_dst;
 
 		sock_rps_save_rxhash(sk, skb);

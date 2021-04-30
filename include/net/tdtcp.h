@@ -53,8 +53,8 @@ static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
 	WRITE_ONCE(global_tdn_id, val);
 }
 /* FLASEW_XXX: same thing as the per socket SET_TDN */
-static inline void SET_SOCK_TDN(struct tcp_sock *tp, u8 val) {
-	WRITE_ONCE(tp->curr_tdn_id, val);
+static inline void SET_SOCK_TDN(struct tcp_sock *tp) {
+	WRITE_ONCE(tp->curr_tdn_id, GET_TDN(tp));
 }
 #endif
 
