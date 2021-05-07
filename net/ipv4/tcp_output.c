@@ -3624,11 +3624,12 @@ static void tcp_connect_init(struct sock *sk)
 	tp->rcv_wup = tp->rcv_nxt;
 	WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
 
-	/* If TDTCP is enabled in kernel config, then a new connection is by
-	 * default TDTCP.
+	/* If TDTCP is enabled in kernel config, and handshake is allowed, the
+	 * local side of a new socket is set to TDTCP enabled to proceed to the
+	 * handshake process.
 	 */
-	tp->is_tdtcp = IS_ENABLED(CONFIG_TDTCP);
-	tp->num_tdns = IS_ENABLED(CONFIG_TDTCP) ? TDTCP_NUM_TDNS : 0;
+	tp->is_tdtcp = tdtcp_handshake_allowed();
+	tp->num_tdns = tdtcp_handshake_allowed() ? TDTCP_NUM_TDNS : 1;
 	/* Assumes peer is not TDTCP capable until hearing from the peer. */
 	tp->rx_opt.tdtcp_ok = false;
 	tp->rx_opt.num_tdns = 0;

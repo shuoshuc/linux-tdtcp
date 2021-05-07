@@ -9,6 +9,14 @@ config TDTCP
 	  network conditions such as bandwidth and latency, while achieving a
 	  better performance than normal TCP.
 
+config TDTCP_HANDSHAKE
+	bool "TDTCP handshake allowed"
+	depends on TDTCP
+	default y
+	help
+	  Controls whether the local side of a new socket is TDTCP enabled. If
+	  set to 'y', TDTCP handshake is allowed on the local side.
+
 config TDTCP_DEV
 	bool "TDTCP dev features"
 	depends on TDTCP

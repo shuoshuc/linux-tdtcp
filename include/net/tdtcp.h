@@ -116,6 +116,12 @@ static inline bool rsk_is_tdtcp(const struct request_sock *req)
 	return tcp_rsk(req)->is_tdtcp;
 }
 
+/* Returns whether TDTCP handshake is allowed. False will fail the handshake. */
+static inline bool tdtcp_handshake_allowed(void)
+{
+	return IS_ENABLED(CONFIG_TDTCP_HANDSHAKE);
+}
+
 /* Returns true if opts is populated with SYN options, otherwise false. */
 bool tdtcp_syn_options(unsigned int *size, struct tdtcp_out_options *opts);
 
@@ -881,6 +887,12 @@ static inline bool sk_is_tdtcp(const struct sock *sk)
 }
 
 static inline bool rsk_is_tdtcp(const struct request_sock *req)
+{
+	return false;
+}
+
+/* Returns whether TDTCP handshake is allowed. False will fail the handshake. */
+static inline bool tdtcp_handshake_allowed(void)
 {
 	return false;
 }

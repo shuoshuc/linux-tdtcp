@@ -169,8 +169,5 @@ void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk,
 		if (flags & (TD_DA_FLG_B | TD_DA_FLG_A)) {
 			TCP_SKB_CB(skb)->ack_tdn_id = GET_TDN(tcp_sk(sk));
 		}
-		/* TODO: update other fields for a subflow? e.g.,
-		 * sub_write_seq
-		 */
 	}
 }

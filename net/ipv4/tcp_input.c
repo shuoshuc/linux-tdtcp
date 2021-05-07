@@ -6888,11 +6888,12 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	tcp_rsk(req)->is_mptcp = 0;
 #endif
 
-	/* If TDTCP is enabled in kernel config, then a new connection is by
-	 * default TDTCP.
+	/* If TDTCP is enabled in kernel config, and handshake is allowed, a new
+	 * connection is Initialized as TDTCP on the local side in order to
+	 * proceed in the handshake process with the peer.
 	 */
-	tcp_rsk(req)->is_tdtcp = IS_ENABLED(CONFIG_TDTCP);
-	tcp_rsk(req)->num_tdns = IS_ENABLED(CONFIG_TDTCP) ? TDTCP_NUM_TDNS : 0;
+	tcp_rsk(req)->is_tdtcp = tdtcp_handshake_allowed();
+	tcp_rsk(req)->num_tdns = tdtcp_handshake_allowed() ? TDTCP_NUM_TDNS : 1;
 	/* Assume peer is not TDTCP capable until actually hearing from it. */
 	tcp_rsk(req)->peer_num_tdns = 0;
 
