@@ -17,6 +17,13 @@ config TDTCP_HANDSHAKE
 	  Controls whether the local side of a new socket is TDTCP enabled. If
 	  set to 'y', TDTCP handshake is allowed on the local side.
 
+config TDTCP_ICMP_TDN_SW
+	bool "React to ICMP TDN switching"
+	depends on TDTCP
+	default y
+	help
+	  If 'y', enables reaction to ICMP packets that switch the TDN.
+
 config TDTCP_DEV
 	bool "TDTCP dev features"
 	depends on TDTCP

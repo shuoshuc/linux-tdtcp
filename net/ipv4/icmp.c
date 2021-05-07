@@ -1046,14 +1046,14 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 	struct tdn_work_data *data;
 
 	/* The receiver only performs TDTCP handshake to enable the sender, but
-	 * does not react to TDN change itself. (CONFIG_TDTCP_DEV should be
-	 * disabled on the receiver.)
+	 * does not react to TDN change itself. (CONFIG_TDTCP_ICMP_TDN_SW should
+	 * be disabled on the receiver.)
 	 */
-	if (!IS_ENABLED(CONFIG_TDTCP_DEV)) return true;
+	if (!IS_ENABLED(CONFIG_TDTCP_ICMP_TDN_SW)) return true;
 
 	net = dev_net(skb_dst(skb)->dev);
 	/* Runtime sysctl/procfs knob to enable or disable reaction to TDN
-	 * changes. CONFIG_TDTCP_DEV always takes precedence.
+	 * changes. CONFIG_TDTCP_ICMP_TDN_SW always takes precedence.
 	 */
 	if (!net->ipv4.sysctl_tcp_tdn_change) return true;
 
