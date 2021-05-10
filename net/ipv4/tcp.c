@@ -1452,6 +1452,12 @@ int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
 	int ret;
 
 	lock_sock(sk);
+#if IS_ENABLED(CONFIG_TDTCP) && !IS_ENABLED(CONFIG_PER_SOCK_TDN)
+	/*
+	 * FLASEW_XXX: added tdn read here 
+	 */
+	SET_SOCK_TDN(tcp_sk(sk));
+#endif
 	ret = tcp_sendmsg_locked(sk, msg, size);
 	release_sock(sk);
 
