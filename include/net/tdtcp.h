@@ -42,11 +42,21 @@ extern u8 global_tdn_id;
 static inline u8 GET_TDN(const struct tcp_sock *tp) {
 	return READ_ONCE(tp->curr_tdn_id);
 }
+/* NOTE: This function is *NOT* supposed to be called when PER_SOCK_TDN=y. */
+static inline u8 GET_GLOBAL_TDN(void) {
+	return 0xFF;
+}
 static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
 	WRITE_ONCE(tp->curr_tdn_id, val);
 }
 #else
 static inline u8 GET_TDN(const struct tcp_sock *tp) {
+	return READ_ONCE(tp->curr_tdn_id);
+}
+/* A debug only helper function that returns the source of truth -
+ * global_tdn_id.
+ */
+static inline u8 GET_GLOBAL_TDN(void) {
 	return READ_ONCE(global_tdn_id);
 }
 static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
@@ -54,7 +64,7 @@ static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
 }
 /* FLASEW_XXX: same thing as the per socket SET_TDN */
 static inline void SET_SOCK_TDN(struct tcp_sock *tp) {
-	WRITE_ONCE(tp->curr_tdn_id, GET_TDN(tp));
+	WRITE_ONCE(tp->curr_tdn_id, READ_ONCE(global_tdn_id));
 }
 #endif
 

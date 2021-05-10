@@ -1114,10 +1114,10 @@ static bool icmp_active_tdn_id(struct sk_buff *skb)
 		}
 	}
 #else
-	prev_tdn = GET_TDN(tp);
+	prev_tdn = GET_GLOBAL_TDN();
 	SET_TDN(tp, tdn_id);
-	pr_debug("icmp_active_tdn_id(): curr_tdn_id:%u->%u, %llu ns since epoch.\n",
-		 prev_tdn, GET_TDN(tp), ktime_get_real_fast_ns());
+	pr_debug("icmp_active_tdn_id(): global_tdn_id:%u->%u, %llu ns since epoch.\n",
+		 prev_tdn, GET_GLOBAL_TDN(), ktime_get_real_fast_ns());
 #endif
 
 	return true;
