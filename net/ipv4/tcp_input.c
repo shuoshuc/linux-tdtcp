@@ -832,8 +832,7 @@ static void tcp_update_pacing_rate(struct sock *sk, u8 tdn_id)
 	 * intermediate values in this location.
 	 * Note: td_set_pacing_rate() uses WRITE_ONCE internally.
 	 */
-	td_set_pacing_rate(sk, min_t(u64, rate, td_get_pacing_rate(sk, tdn_id)),
-			   tdn_id);
+	td_set_pacing_rate(sk, min_t(u64, rate, sk->sk_max_pacing_rate), tdn_id);
 }
 
 /* Calculate rto without backoff.  This is the second half of Van Jacobson's
