@@ -3214,8 +3214,20 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	bool rearm_timer = false;
 	u32 max_segs;
 	int mib_idx;
+    int k, pkts_out = 0;
+	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
+	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
+	 * will be automatically redirected to the default ones.
+	 */
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
 
-	if (!td_pkts_out(tp))
+    /* This quick check only holds if pkts_out is 0 in all TDNs, which means
+     * the rtx_queue is empty and hence nothing to send.
+	 */
+	for (k = 0; k < num_tdns; k++) {
+		pkts_out += td_get_pkts_out(tp, k);
+	}
+	if (!pkts_out)
 		return;
 
 	rtx_head = tcp_rtx_queue_head(sk);
