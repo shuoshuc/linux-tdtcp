@@ -3686,7 +3686,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 	struct tcp_fastopen_request *fo = tp->fastopen_req;
 	int space, err = 0;
 	struct sk_buff *syn_data;
-    u8 tdn = 0;
+	u8 tdn = 0;
 
 	tp->rx_opt.mss_clamp = tp->advmss;  /* If MSS is not cached */
 	if (!tcp_fastopen_cookie_check(sk, &tp->rx_opt.mss_clamp, &fo->cookie))
@@ -3803,7 +3803,7 @@ int tcp_connect(struct sock *sk)
      * it will not be overwritten in other places. Fastopen SYN+data does not
      * have this workaround because it is called by this function.
      */
-    TCP_SKB_CB(buff)->data_tdn_id = GET_TDN(tp);
+	TCP_SKB_CB(buff)->data_tdn_id = GET_TDN(tp);
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
