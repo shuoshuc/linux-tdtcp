@@ -781,11 +781,25 @@ static inline u32 td_retrans_stamp(const struct tcp_sock *tp)
 		TD_RETRANS_STAMP(tp, GET_TDN(tp)) : tp->retrans_stamp;
 }
 
+/* Return retrans_stamp of given TDN or the default variable value. */
+static inline u32 td_get_retrans_stamp(const struct tcp_sock *tp, u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RETRANS_STAMP(tp, tdn_id) : tp->retrans_stamp;
+}
+
 /* Assign val to retrans_stamp of current TDN or the default variable. */
 static inline void set_retrans_stamp(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_RETRANS_STAMP(tp, GET_TDN(tp)) : &tp->retrans_stamp) = val;
+}
+
+/* Assign val to retrans_stamp of given TDN or the default variable. */
+static inline void td_set_retrans_stamp(struct tcp_sock *tp, u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RETRANS_STAMP(tp, tdn_id) : &tp->retrans_stamp) = val;
 }
 
 /* Return reordering of current TDN or the default variable value. */

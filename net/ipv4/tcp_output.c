@@ -3192,12 +3192,13 @@ int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	}
 
 	/* Save stamp of the first (attempted) retransmit. */
-	if (!td_retrans_stamp(tp))
-		set_retrans_stamp(tp, tcp_skb_timestamp(skb));
+	if (!td_get_retrans_stamp(tp, retx_tdn))
+		td_set_retrans_stamp(tp, retx_tdn, tcp_skb_timestamp(skb));
 
-	if (td_undo_retrans(tp) < 0)
-		set_undo_retrans(tp, 0);
-	set_undo_retrans(tp, td_undo_retrans(tp) + tcp_skb_pcount(skb));
+	if (td_get_undo_retrans(tp, retx_tdn) < 0)
+		td_set_undo_retrans(tp, retx_tdn, 0);
+	td_set_undo_retrans(tp, retx_tdn,
+            td_get_undo_retrans(tp, retx_tdn) + tcp_skb_pcount(skb));
 	return err;
 }
 
