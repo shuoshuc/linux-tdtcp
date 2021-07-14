@@ -3669,7 +3669,8 @@ static void tcp_connect_queue_skb(struct sock *sk, struct sk_buff *skb)
 	sk_wmem_queued_add(sk, skb->truesize);
 	sk_mem_charge(sk, skb->truesize);
 	WRITE_ONCE(tp->write_seq, tcb->end_seq);
-	set_pkts_out(tp, td_pkts_out(tp) + tcp_skb_pcount(skb));
+	td_set_pkts_out(tp, tcb->data_tdn_id,
+            td_get_pkts_out(tp, tcb->data_tdn_id) + tcp_skb_pcount(skb));
 }
 
 /* Build and send a SYN with data and (cached) Fast Open cookie. However,
@@ -3685,6 +3686,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 	struct tcp_fastopen_request *fo = tp->fastopen_req;
 	int space, err = 0;
 	struct sk_buff *syn_data;
+    u8 tdn = 0;
 
 	tp->rx_opt.mss_clamp = tp->advmss;  /* If MSS is not cached */
 	if (!tcp_fastopen_cookie_check(sk, &tp->rx_opt.mss_clamp, &fo->cookie))
@@ -3752,7 +3754,9 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 
 	/* data was not sent, put it in write_queue */
 	__skb_queue_tail(&sk->sk_write_queue, syn_data);
-	set_pkts_out(tp, td_pkts_out(tp) - tcp_skb_pcount(syn_data));
+    tdn = TCP_SKB_CB(syn_data)->data_tdn_id;
+	td_set_pkts_out(tp, tdn,
+            td_get_pkts_out(tp, tdn) - tcp_skb_pcount(syn_data));
 
 fallback:
 	/* Send a regular SYN with Fast Open cookie request option */
@@ -3792,6 +3796,14 @@ int tcp_connect(struct sock *sk)
 	tcp_init_nondata_skb(buff, tp->write_seq++, TCPHDR_SYN);
 	tcp_mstamp_refresh(tp);
 	set_retrans_stamp(tp, tcp_time_stamp(tp));
+    /* This function is either called while sending a SYN or a SYN+data. In
+     * both cases, tcb->data_tdn_id is uninitialized yet (defaults to 0) since
+     * pure data SKBs have their data_tdn_id set in tcp_write_xmit().
+     * As a workaround, SYN SKB will have its data_tdn_id set right here and
+     * it will not be overwritten in other places. Fastopen SYN+data does not
+     * have this workaround because it is called by this function.
+     */
+    TCP_SKB_CB(buff)->data_tdn_id = GET_TDN(tp);
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
