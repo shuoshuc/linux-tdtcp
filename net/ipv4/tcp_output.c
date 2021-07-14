@@ -3754,7 +3754,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 
 	/* data was not sent, put it in write_queue */
 	__skb_queue_tail(&sk->sk_write_queue, syn_data);
-    tdn = TCP_SKB_CB(syn_data)->data_tdn_id;
+	tdn = TCP_SKB_CB(syn_data)->data_tdn_id;
 	td_set_pkts_out(tp, tdn,
             td_get_pkts_out(tp, tdn) - tcp_skb_pcount(syn_data));
 
