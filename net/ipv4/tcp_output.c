@@ -67,7 +67,8 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned int prior_packets = td_pkts_out(tp);
+    u8 skb_tdn = TCP_SKB_CB(skb)->data_tdn_id;
+	unsigned int prior_packets = td_get_pkts_out(tp, skb_tdn);
 
 	WRITE_ONCE(tp->snd_nxt, TCP_SKB_CB(skb)->end_seq);
 
@@ -77,7 +78,8 @@ static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 	if (tp->highest_sack == NULL)
 		tp->highest_sack = skb;
 
-	set_pkts_out(tp, td_pkts_out(tp) + tcp_skb_pcount(skb));
+	td_set_pkts_out(tp, skb_tdn,
+            td_get_pkts_out(tp, skb_tdn) + tcp_skb_pcount(skb));
 	if (!prior_packets || icsk->icsk_pending == ICSK_TIME_LOSS_PROBE)
 		tcp_rearm_rto(sk);
 
