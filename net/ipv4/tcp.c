@@ -1454,7 +1454,7 @@ int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
 	lock_sock(sk);
 #if IS_ENABLED(CONFIG_TDTCP) && !IS_ENABLED(CONFIG_PER_SOCK_TDN)
 	/*
-	 * FLASEW_XXX: added tdn read here 
+	 * FLASEW_XXX: added tdn read here
 	 */
 	SET_SOCK_TDN(tcp_sk(sk));
 #endif
@@ -2628,6 +2628,12 @@ static void tcp_rtx_queue_purge(struct sock *sk)
 void tcp_write_queue_purge(struct sock *sk)
 {
 	struct sk_buff *skb;
+	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
+	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
+	 * will be automatically redirected to the default ones.
+	 */
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	int k;
 
 	tcp_chrono_stop(sk, TCP_CHRONO_BUSY);
 	while ((skb = __skb_dequeue(&sk->sk_write_queue)) != NULL) {
@@ -2643,7 +2649,12 @@ void tcp_write_queue_purge(struct sock *sk)
 	INIT_LIST_HEAD(&tcp_sk(sk)->tsorted_sent_queue);
 	sk_mem_reclaim(sk);
 	tcp_clear_all_retrans_hints(tcp_sk(sk));
-	set_pkts_out(tcp_sk(sk), 0);
+	/* SKBs in the write queue corresponds to multiple TDNs, purging it means
+	 * that pkts_out for all TDNs need to be reset.
+	 */
+	for (k = 0; k < num_tdns; k++) {
+		td_set_pkts_out(tcp_sk(sk), k, 0);
+	}
 	inet_csk(sk)->icsk_backoff = 0;
 }
 
