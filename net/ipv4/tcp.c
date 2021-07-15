@@ -2632,7 +2632,7 @@ void tcp_write_queue_purge(struct sock *sk)
 	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
 	 * will be automatically redirected to the default ones.
 	 */
-	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tcp_sk(sk)->num_tdns : 1;
 	int k;
 
 	tcp_chrono_stop(sk, TCP_CHRONO_BUSY);
