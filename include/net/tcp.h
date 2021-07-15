@@ -1247,6 +1247,7 @@ static inline __u32 tcp_current_ssthresh(const struct sock *sk)
 
 /* Use define here intentionally to get WARN_ON location shown at the caller */
 #define tcp_verify_left_out(tp)	WARN_ON(tcp_left_out(tp) > td_pkts_out(tp))
+#define tdtcp_verify_left_out(tp, tdn)	WARN_ON(tdtcp_left_out(tp, tdn) > td_get_pkts_out(tp, tdn))
 
 void tcp_enter_cwr(struct sock *sk);
 __u32 tcp_init_cwnd(const struct tcp_sock *tp, const struct dst_entry *dst);
