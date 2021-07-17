@@ -3798,13 +3798,13 @@ int tcp_connect(struct sock *sk)
 	tcp_init_nondata_skb(buff, tp->write_seq++, TCPHDR_SYN);
 	tcp_mstamp_refresh(tp);
 	set_retrans_stamp(tp, tcp_time_stamp(tp));
-    /* This function is either called while sending a SYN or a SYN+data. In
-     * both cases, tcb->data_tdn_id is uninitialized yet (defaults to 0) since
-     * pure data SKBs have their data_tdn_id set in tcp_write_xmit().
-     * As a workaround, SYN SKB will have its data_tdn_id set right here and
-     * it will not be overwritten in other places. Fastopen SYN+data does not
-     * have this workaround because it is called by this function.
-     */
+	/* This function is either called while sending a SYN or a SYN+data. In
+	 * both cases, tcb->data_tdn_id is uninitialized yet (defaults to 0) since
+	 * pure data SKBs have their data_tdn_id set in tcp_write_xmit().
+	 * As a workaround, SYN SKB will have its data_tdn_id set right here and
+	 * it will not be overwritten in other places. Fastopen SYN+data does not
+	 * have this workaround because it is called by this function.
+	 */
 	TCP_SKB_CB(buff)->data_tdn_id = GET_TDN(tp);
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
