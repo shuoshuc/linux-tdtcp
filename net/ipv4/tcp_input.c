@@ -2420,6 +2420,8 @@ static void DBGUNDO(struct sock *sk, const char *msg)
 static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+    u8 num_tdn = sk_is_tdtcp(sk) ? tp->num_tdns : 1;
+    int i;
 
 	if (unmark_loss) {
 		struct sk_buff *skb;
@@ -2427,7 +2429,9 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 		skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
 			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
 		}
-		set_lost_out(tp, 0);
+        for (i = 0; i < num_tdn; i++) {
+            td_set_lost_out(tp, i, 0);
+        }
 		tcp_clear_all_retrans_hints(tp);
 	}
 
