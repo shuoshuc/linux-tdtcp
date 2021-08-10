@@ -906,13 +906,24 @@ static DEFINE_PER_CPU(struct tsq_tasklet, tsq_tasklet);
 
 static void tcp_tsq_write(struct sock *sk)
 {
+	bool retx_cond = false;
+	int i, num_tdns;
+
 	if ((1 << sk->sk_state) &
 	    (TCPF_ESTABLISHED | TCPF_FIN_WAIT1 | TCPF_CLOSING |
 	     TCPF_CLOSE_WAIT  | TCPF_LAST_ACK)) {
 		struct tcp_sock *tp = tcp_sk(sk);
+		num_tdns = sk_is_tdtcp(sk) ? tp->num_tdns : 1;
 
-		if (td_lost_out(tp) > td_retrans_out(tp) &&
-		    td_cwnd(tp) > tcp_packets_in_flight(tp)) {
+		for (i = 0; i < num_tdns; i++) {
+			retx_cond &= (td_get_lost_out(tp, i) > td_get_retrans_out(tp, i) &&
+				td_get_cwnd(tp, i) > tdtcp_packets_in_flight(tp, i));
+		}
+
+		/* If any TDN has outstanding lost packets that need to be
+		 * retransmitted, the retransmission function should be invoked.
+		 */
+		if (retx_cond) {
 			tcp_mstamp_refresh(tp);
 			tcp_xmit_retransmit_queue(sk);
 		}
