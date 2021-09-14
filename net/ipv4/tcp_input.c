@@ -2882,8 +2882,9 @@ static bool tcp_force_fast_retransmit(struct sock *sk)
  * It does _not_ decide what to send, it is made in function
  * tcp_xmit_retransmit_queue().
  */
-static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
-				  int num_dupack, int *ack_flag, int *rexmit)
+static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
+				    int num_dupack, int *ack_flag, int *rexmit,
+				    u8 tdn)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -2891,47 +2892,49 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 	bool do_lost = num_dupack || ((flag & FLAG_DATA_SACKED) &&
 				      tcp_force_fast_retransmit(sk));
 
-	if (!td_pkts_out(tp) && td_sacked_out(tp))
-		set_sacked_out(tp, 0);
+	if (!td_get_pkts_out(tp, tdn) && td_get_sacked_out(tp, tdn)) {
+		td_set_sacked_out(tp, tdn, 0);
+	}
 
 	/* Now state machine starts.
 	 * A. ECE, hence prohibit cwnd undoing, the reduction is required. */
 	if (flag & FLAG_ECE)
-		set_prior_ssthresh(tp, 0);
+		td_set_prior_ssthresh(tp, tdn, 0);
 
 	/* B. In all the states check for reneging SACKs. */
 	if (tcp_check_sack_reneging(sk, flag))
 		return;
 
 	/* C. Check consistency of the current state. */
-	tcp_verify_left_out(tp);
+	tdtcp_verify_left_out(tp, tdn);
 
 	/* D. Check state exit conditions. State can be terminated
 	 *    when high_seq is ACKed. */
-	if (td_ca_state(sk) == TCP_CA_Open) {
-		WARN_ON(td_retrans_out(tp) != 0);
-		set_retrans_stamp(tp, 0);
-	} else if (!before(tp->snd_una, td_high_seq(tp))) {
-		u8 prev_ca_state = td_ca_state(sk);
-		u32 prev_cwnd = td_cwnd(tp);
-		u32 prev_ssthresh = td_ssthresh(tp);
+	if (td_get_ca_state(sk, tdn) == TCP_CA_Open) {
+		WARN_ON(td_get_retrans_out(tp, tdn) != 0);
+		td_set_retrans_stamp(tp, tdn, 0);
+	} else if (!before(tp->snd_una, td_get_high_seq(tp, tdn))) {
+		u8 prev_ca_state = td_get_ca_state(sk, tdn);
+		u32 prev_cwnd = td_get_cwnd(tp, tdn);
+		u32 prev_ssthresh = td_get_ssthresh(tp, tdn);
 		u32 snd_una = tp->snd_una;
-		u32 high_seq = td_high_seq(tp);
+		u32 high_seq = td_get_high_seq(tp, tdn);
 
-		switch (td_ca_state(sk)) {
+		switch (td_get_ca_state(sk, tdn)) {
 		case TCP_CA_CWR:
 			/* CWR is to be held something *above* high_seq
 			 * is ACKed for CWR bit to reach receiver. */
-			if (tp->snd_una != td_high_seq(tp)) {
+			if (tp->snd_una != td_get_high_seq(tp, tdn)) {
 				tcp_end_cwnd_reduction(sk);
-				tcp_set_ca_state(sk, TCP_CA_Open);
+				tdtcp_set_ca_state(sk, tdn, TCP_CA_Open);
 
 				pr_debug("tcp_fastretrans_alert(): sk=%p, tdn=%u, ca_state %u->%u, "
 					 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 					 "snd_una=%u, high_seq=%u.\n",
-					 sk, GET_TDN(tp), prev_ca_state, td_ca_state(sk),
-					 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
-					 tcp_packets_in_flight(tp), snd_una, high_seq);
+					 sk, GET_TDN(tp), prev_ca_state, td_get_ca_state(sk, tdn),
+					 prev_cwnd, td_get_cwnd(tp, tdn), prev_ssthresh,
+					 td_get_ssthresh(tp, tdn), tdtcp_packets_in_flight(tp, tdn),
+					 snd_una, high_seq);
 			}
 			break;
 
@@ -2946,10 +2949,11 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 				 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
 				 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
 				 "snd_una=%u, high_seq=%u.\n",
-				 sk, GET_TDN(tp), prev_ca_state, td_ca_state(sk),
-				 prev_cwnd, td_cwnd(tp), prev_ssthresh, td_ssthresh(tp),
-				 tcp_packets_in_flight(tp), td_pkts_out(tp),
-				 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
+				 sk, GET_TDN(tp), prev_ca_state, td_get_ca_state(sk, tdn),
+				 prev_cwnd, td_get_cwnd(tp, tdn), prev_ssthresh,
+				 td_get_ssthresh(tp, tdn), tdtcp_packets_in_flight(tp, tdn),
+				 td_get_pkts_out(tp, tdn), td_get_sacked_out(tp, tdn),
+				 td_get_lost_out(tp, tdn), td_get_retrans_out(tp, tdn),
 				 snd_una, high_seq);
 			break;
 		}
@@ -3032,6 +3036,17 @@ static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 	if (!tcp_is_rack(sk) && do_lost)
 		tcp_update_scoreboard(sk, fast_rexmit);
 	*rexmit = REXMIT_LOST;
+}
+
+/* A wrapper of per-TDN call tdtcp_fastretrans_alert(). */
+static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
+				  int num_dupack, int *ack_flag, int *rexmit)
+{
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	for (i = 0; i < num_tdns; i++) {
+		tdtcp_fastretrans_alert(sk, prior_snd_una, num_dupack, ack_flag,
+					rexmit, i);
+	}
 }
 
 static void tcp_update_rtt_min(struct sock *sk, u32 rtt_us, const int flag)

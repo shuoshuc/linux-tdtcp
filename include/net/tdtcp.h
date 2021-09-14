@@ -907,6 +907,16 @@ static inline unsigned int tdtcp_packets_in_flight(const struct tcp_sock *tp,
 		td_get_retrans_out(tp, tdn_id);
 }
 
+static inline void tdtcp_set_ca_state(struct sock *sk, const u8 tdn,
+				      const u8 ca_state)
+{
+	struct inet_connection_sock *icsk = inet_csk(sk);
+
+	if (icsk->icsk_ca_ops->set_state)
+		icsk->icsk_ca_ops->set_state(sk, ca_state);
+	td_set_ca_state(sk, tdn, ca_state);
+}
+
 #else
 
 static inline bool sk_is_tdtcp(const struct sock *sk)
