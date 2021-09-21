@@ -2359,6 +2359,12 @@ static inline bool tcp_packet_delayed(const struct tcp_sock *tp)
 	       tcp_tsopt_ecr_before(tp, td_retrans_stamp(tp));
 }
 
+static inline bool tdtcp_packet_delayed(const struct tcp_sock *tp, const u8 tdn)
+{
+	return td_get_retrans_stamp(tp, tdn) &&
+	       tcp_tsopt_ecr_before(tp, td_get_retrans_stamp(tp, tdn));
+}
+
 /* Undo procedures. */
 
 /* We can clear retrans_stamp when there are no retransmissions in the
@@ -2381,6 +2387,21 @@ static bool tcp_any_retrans_done(const struct sock *sk)
 	struct sk_buff *skb;
 
 	if (td_retrans_out(tp))
+		return true;
+
+	skb = tcp_rtx_queue_head(sk);
+	if (unlikely(skb && TCP_SKB_CB(skb)->sacked & TCPCB_EVER_RETRANS))
+		return true;
+
+	return false;
+}
+
+static bool tdtcp_any_retrans_done(const struct sock *sk, const u8 tdn)
+{
+	const struct tcp_sock *tp = tcp_sk(sk);
+	struct sk_buff *skb;
+
+	if (td_get_retrans_out(tp, tdn))
 		return true;
 
 	skb = tcp_rtx_queue_head(sk);
@@ -2420,8 +2441,8 @@ static void DBGUNDO(struct sock *sk, const char *msg)
 static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-    u8 num_tdn = sk_is_tdtcp(sk) ? tp->num_tdns : 1;
-    int i;
+	u8 num_tdn = sk_is_tdtcp(sk) ? tp->num_tdns : 1;
+	int i;
 
 	if (unmark_loss) {
 		struct sk_buff *skb;
@@ -2429,9 +2450,9 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 		skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
 			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
 		}
-        for (i = 0; i < num_tdn; i++) {
-            td_set_lost_out(tp, i, 0);
-        }
+		for (i = 0; i < num_tdn; i++) {
+		    td_set_lost_out(tp, i, 0);
+		}
 		tcp_clear_all_retrans_hints(tp);
 	}
 
@@ -2450,9 +2471,54 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 	tp->rack.advanced = 1; /* Force RACK to re-exam losses */
 }
 
+static void tdtcp_undo_cwnd_reduction(struct sock *sk, const u8 tdn,
+				      bool unmark_loss)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	u8 num_tdn = sk_is_tdtcp(sk) ? tp->num_tdns : 1;
+	int i;
+
+	if (unmark_loss) {
+		struct sk_buff *skb;
+
+		skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
+			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
+		}
+		for (i = 0; i < num_tdn; i++) {
+		    td_set_lost_out(tp, i, 0);
+		}
+		tcp_clear_all_retrans_hints(tp);
+	}
+
+	if (td_get_prior_ssthresh(tp, tdn)) {
+		const struct inet_connection_sock *icsk = inet_csk(sk);
+
+	/* This is where the ca_ops API diverges for TDTCP CC. */
+#if IS_ENABLED(CONFIG_TDTCP)
+		td_set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk, tdn), tdn);
+#else
+		td_set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk), tdn);
+#endif
+
+		if (td_get_prior_ssthresh(tp, tdn) > td_get_ssthresh(tp, tdn)) {
+			td_set_ssthresh(tp, td_get_prior_ssthresh(tp, tdn), tdn);
+			tcp_ecn_withdraw_cwr(tp);
+		}
+	}
+	td_set_cwnd_stamp(tp, tcp_jiffies32, tdn);
+	td_set_undo_marker(tp, tdn, 0);
+	tp->rack.advanced = 1; /* Force RACK to re-exam losses */
+}
+
 static inline bool tcp_may_undo(const struct tcp_sock *tp)
 {
 	return td_undo_marker(tp) && (!td_undo_retrans(tp) || tcp_packet_delayed(tp));
+}
+
+static inline bool tdtcp_may_undo(const struct tcp_sock *tp, const u8 tdn)
+{
+	return td_get_undo_marker(tp, tdn) &&
+		(!td_get_undo_retrans(tp, tdn) || tdtcp_packet_delayed(tp, tdn));
 }
 
 /* People celebrate: "We love our President!" */
@@ -2467,7 +2533,7 @@ static bool tcp_try_undo_recovery(struct sock *sk)
 		 * or our original transmission succeeded.
 		 */
 		DBGUNDO(sk, td_ca_state(sk) == TCP_CA_Loss ? "loss" : "retrans");
-		tcp_undo_cwnd_reduction(sk, false);
+		tdtcp_undo_cwnd_reduction(sk, tdn, false);
 		if (td_ca_state(sk) == TCP_CA_Loss)
 			mib_idx = LINUX_MIB_TCPLOSSUNDO;
 		else
@@ -2486,6 +2552,40 @@ static bool tcp_try_undo_recovery(struct sock *sk)
 		return true;
 	}
 	tcp_set_ca_state(sk, TCP_CA_Open);
+	tp->is_sack_reneg = 0;
+	return false;
+}
+
+static bool tdtcp_try_undo_recovery(struct sock *sk, const u8 tdn)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (tdtcp_may_undo(tp, tdn)) {
+		int mib_idx;
+
+		/* Happy end! We did not retransmit anything
+		 * or our original transmission succeeded.
+		 */
+		DBGUNDO(sk, td_get_ca_state(sk, tdn) == TCP_CA_Loss ? "loss" : "retrans");
+		tcp_undo_cwnd_reduction(sk, false);
+		if (td_get_ca_state(sk, tdn) == TCP_CA_Loss)
+			mib_idx = LINUX_MIB_TCPLOSSUNDO;
+		else
+			mib_idx = LINUX_MIB_TCPFULLUNDO;
+
+		NET_INC_STATS(sock_net(sk), mib_idx);
+	} else if (tp->rack.reo_wnd_persist) {
+		tp->rack.reo_wnd_persist--;
+	}
+	if (tp->snd_una == td_get_high_seq(tp, tdn) && tcp_is_reno(tp)) {
+		/* Hold old state until something *above* high_seq
+		 * is ACKed. For Reno it is MUST to prevent false
+		 * fast retransmits (RFC2582). SACK TCP is safe. */
+		if (!tdtcp_any_retrans_done(sk, tdn))
+			td_set_retrans_stamp(tp, tdn, 0);
+		return true;
+	}
+	tdtcp_set_ca_state(sk, tdn, TCP_CA_Open);
 	tp->is_sack_reneg = 0;
 	return false;
 }
@@ -2605,6 +2705,23 @@ static inline void tcp_end_cwnd_reduction(struct sock *sk)
 	    (td_ca_state(sk) == TCP_CA_CWR || td_undo_marker(tp))) {
 		set_cwnd(tp, td_ssthresh(tp));
 		set_cwnd_stamp(tp, tcp_jiffies32);
+	}
+	tcp_ca_event(sk, CA_EVENT_COMPLETE_CWR);
+}
+
+static inline void tdtcp_end_cwnd_reduction(struct sock *sk, const u8 tdn)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (inet_csk(sk)->icsk_ca_ops->cong_control)
+		return;
+
+	/* Reset cwnd to ssthresh in CWR or Recovery (unless it's undone) */
+	if (td_get_ssthresh(tp, tdn) < TCP_INFINITE_SSTHRESH &&
+	    (td_get_ca_state(sk, tdn) == TCP_CA_CWR ||
+	     td_get_undo_marker(tp, tdn))) {
+		td_set_cwnd(tp, td_get_ssthresh(tp, tdn), tdn);
+		td_set_cwnd_stamp(tp, tcp_jiffies32, tdn);
 	}
 	tcp_ca_event(sk, CA_EVENT_COMPLETE_CWR);
 }
@@ -2925,7 +3042,7 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			/* CWR is to be held something *above* high_seq
 			 * is ACKed for CWR bit to reach receiver. */
 			if (tp->snd_una != td_get_high_seq(tp, tdn)) {
-				tcp_end_cwnd_reduction(sk);
+				tdtcp_end_cwnd_reduction(sk, tdn);
 				tdtcp_set_ca_state(sk, tdn, TCP_CA_Open);
 
 				pr_debug("tcp_fastretrans_alert(): sk=%p, tdn=%u, ca_state %u->%u, "
@@ -2941,9 +3058,9 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		case TCP_CA_Recovery:
 			if (tcp_is_reno(tp))
 				tcp_reset_reno_sack(tp);
-			if (tcp_try_undo_recovery(sk))
+			if (tdtcp_try_undo_recovery(sk))
 				return;
-			tcp_end_cwnd_reduction(sk);
+			tdtcp_end_cwnd_reduction(sk, tdn);
 
 			pr_debug("[exit recovery] sk=%p, tdn=%u, ca_state %u->%u, "
 				 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "

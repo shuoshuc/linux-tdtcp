@@ -478,11 +478,11 @@ static void tdtcp_cubic_acked(struct sock *sk, const struct ack_sample *sample)
 }
 
 /* This is the same as tdtcp_reno_undo_cwnd(). */
-static u32 tdtcp_cubic_undo_cwnd(struct sock *sk)
+static u32 tdtcp_cubic_undo_cwnd(struct sock *sk, const u8 tdn)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(td_cwnd(tp), td_prior_cwnd(tp));
+	return max(td_get_cwnd(tp, tdn), td_get_prior_cwnd(tp, tdn));
 }
 
 static struct tcp_congestion_ops tdtcp_cubic __read_mostly = {

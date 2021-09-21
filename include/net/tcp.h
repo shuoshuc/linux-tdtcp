@@ -1083,8 +1083,14 @@ struct tcp_congestion_ops {
 	void (*cwnd_event)(struct sock *sk, enum tcp_ca_event ev);
 	/* call when ack arrives (optional) */
 	void (*in_ack_event)(struct sock *sk, u32 flags);
-	/* new value of cwnd after loss (required) */
+	/* new value of cwnd after loss (required). Note this is where the
+	 * ca_ops API diverges for TDTCP CC.
+	 */
+#if IS_ENABLED(CONFIG_TDTCP)
+	u32  (*undo_cwnd)(struct sock *sk, const u8 tdn);
+#else
 	u32  (*undo_cwnd)(struct sock *sk);
+#endif
 	/* hook for packet ack accounting (optional) */
 	void (*pkts_acked)(struct sock *sk, const struct ack_sample *sample);
 	/* override sysctl_tcp_min_tso_segs */
@@ -1152,6 +1158,16 @@ static inline void tcp_set_ca_state(struct sock *sk, const u8 ca_state)
 	if (icsk->icsk_ca_ops->set_state)
 		icsk->icsk_ca_ops->set_state(sk, ca_state);
 	set_ca_state(sk, ca_state);
+}
+
+static inline void tdtcp_set_ca_state(struct sock *sk, const u8 tdn,
+				      const u8 ca_state)
+{
+	struct inet_connection_sock *icsk = inet_csk(sk);
+
+	if (icsk->icsk_ca_ops->set_state)
+		icsk->icsk_ca_ops->set_state(sk, ca_state);
+	td_set_ca_state(sk, tdn, ca_state);
 }
 
 static inline void tcp_ca_event(struct sock *sk, const enum tcp_ca_event event)
