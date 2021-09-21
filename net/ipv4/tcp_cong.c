@@ -501,7 +501,7 @@ u32 tcp_reno_ssthresh(struct sock *sk)
 }
 EXPORT_SYMBOL_GPL(tcp_reno_ssthresh);
 
-u32 tcp_reno_undo_cwnd(struct sock *sk)
+u32 tcp_reno_undo_cwnd(struct sock *sk, const u8 tdn)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 

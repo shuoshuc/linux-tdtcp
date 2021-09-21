@@ -1201,7 +1201,7 @@ set_sndbuf:
 		sk->sk_pacing_rate = min(sk->sk_pacing_rate, ulval);
 #if IS_ENABLED(CONFIG_TDTCP)
 		for (i = 0; i < MAX_NUM_TDNS; i++) {
-			td_set_pacing_rate(sk, min(td_get_pacing_rate(sk, i), ulval), i);
+			td_set_pacing_rate(sk, i, min(td_get_pacing_rate(sk, i), ulval));
 		}
 #endif
 		break;
@@ -3055,7 +3055,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_pacing_rate = ~0UL;
 #if IS_ENABLED(CONFIG_TDTCP)
 	for (i = 0; i < MAX_NUM_TDNS; i++) {
-		td_set_pacing_rate(sk, ~0UL, i);
+		td_set_pacing_rate(sk, i, ~0UL);
 	}
 #endif
 	WRITE_ONCE(sk->sk_pacing_shift, 10);

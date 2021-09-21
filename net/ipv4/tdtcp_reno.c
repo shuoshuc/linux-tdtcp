@@ -37,11 +37,11 @@ static u32 tdtcp_reno_ssthresh(struct sock *sk)
 	return max(td_cwnd(tp) >> 1U, 2U);
 }
 
-static u32 tdtcp_reno_undo_cwnd(struct sock *sk)
+static u32 tdtcp_reno_undo_cwnd(struct sock *sk, const u8 tdn)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(td_cwnd(tp), td_prior_cwnd(tp));
+	return max(td_get_cwnd(tp, tdn), td_get_prior_cwnd(tp, tdn));
 }
 
 static struct tcp_congestion_ops tdtcp_reno __read_mostly = {

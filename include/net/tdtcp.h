@@ -191,8 +191,8 @@ static inline void set_pacing_rate(struct sock *sk, unsigned long val)
  * Note that sk_pacing_rate is shared between FQ qdisc and TCP stack,
  * so we use WRITE_ONCE to get rid of potential cache.
  */
-static inline void td_set_pacing_rate(struct sock *sk, unsigned long val,
-				      u8 tdn_id)
+static inline void td_set_pacing_rate(struct sock *sk, const u8 tdn_id,
+				      unsigned long val)
 {
 	WRITE_ONCE(*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		     &TD_PACING_RATE(sk, tdn_id) : &TD_PACING_RATE(sk, 0)), val);

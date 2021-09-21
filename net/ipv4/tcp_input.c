@@ -832,7 +832,7 @@ static void tcp_update_pacing_rate(struct sock *sk, u8 tdn_id)
 	 * intermediate values in this location.
 	 * Note: td_set_pacing_rate() uses WRITE_ONCE internally.
 	 */
-	td_set_pacing_rate(sk, min_t(u64, rate, sk->sk_max_pacing_rate), tdn_id);
+	td_set_pacing_rate(sk, tdn_id, min_t(u64, rate, sk->sk_max_pacing_rate));
 }
 
 /* Calculate rto without backoff.  This is the second half of Van Jacobson's
@@ -2459,7 +2459,12 @@ static void tcp_undo_cwnd_reduction(struct sock *sk, bool unmark_loss)
 	if (td_prior_ssthresh(tp)) {
 		const struct inet_connection_sock *icsk = inet_csk(sk);
 
+	/* This is where the ca_ops API diverges for TDTCP CC. */
+#if IS_ENABLED(CONFIG_TDTCP)
+		set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk, GET_TDN(tp)));
+#else
 		set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk));
+#endif
 
 		if (td_prior_ssthresh(tp) > td_ssthresh(tp)) {
 			set_ssthresh(tp, td_prior_ssthresh(tp));
@@ -2533,7 +2538,7 @@ static bool tcp_try_undo_recovery(struct sock *sk)
 		 * or our original transmission succeeded.
 		 */
 		DBGUNDO(sk, td_ca_state(sk) == TCP_CA_Loss ? "loss" : "retrans");
-		tdtcp_undo_cwnd_reduction(sk, tdn, false);
+		tcp_undo_cwnd_reduction(sk, false);
 		if (td_ca_state(sk) == TCP_CA_Loss)
 			mib_idx = LINUX_MIB_TCPLOSSUNDO;
 		else
@@ -2567,7 +2572,7 @@ static bool tdtcp_try_undo_recovery(struct sock *sk, const u8 tdn)
 		 * or our original transmission succeeded.
 		 */
 		DBGUNDO(sk, td_get_ca_state(sk, tdn) == TCP_CA_Loss ? "loss" : "retrans");
-		tcp_undo_cwnd_reduction(sk, false);
+		tdtcp_undo_cwnd_reduction(sk, tdn, false);
 		if (td_get_ca_state(sk, tdn) == TCP_CA_Loss)
 			mib_idx = LINUX_MIB_TCPLOSSUNDO;
 		else
@@ -3058,7 +3063,7 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		case TCP_CA_Recovery:
 			if (tcp_is_reno(tp))
 				tcp_reset_reno_sack(tp);
-			if (tdtcp_try_undo_recovery(sk))
+			if (tdtcp_try_undo_recovery(sk, tdn))
 				return;
 			tdtcp_end_cwnd_reduction(sk, tdn);
 
@@ -3159,7 +3164,9 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 static void tcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 				  int num_dupack, int *ack_flag, int *rexmit)
 {
+	struct tcp_sock *tp = tcp_sk(sk);
 	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	int i;
 	for (i = 0; i < num_tdns; i++) {
 		tdtcp_fastretrans_alert(sk, prior_snd_una, num_dupack, ack_flag,
 					rexmit, i);

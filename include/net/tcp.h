@@ -1128,7 +1128,7 @@ void tcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked);
 void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked, u8 tdn);
 
 u32 tcp_reno_ssthresh(struct sock *sk);
-u32 tcp_reno_undo_cwnd(struct sock *sk);
+u32 tcp_reno_undo_cwnd(struct sock *sk, const u8 tdn);
 void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id);
 extern struct tcp_congestion_ops tcp_reno;
 
