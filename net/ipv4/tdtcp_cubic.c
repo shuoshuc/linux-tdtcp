@@ -130,7 +130,7 @@ static void tdtcp_cubic_init(struct sock *sk)
 
 	if (!hystart && initial_ssthresh) {
 		for (i = 0; i < MAX_NUM_TDNS; i++) {
-			td_set_ssthresh(tcp_sk(sk), initial_ssthresh, i);
+			td_set_ssthresh(tcp_sk(sk), i, initial_ssthresh);
 		}
 	}
 }
@@ -420,7 +420,7 @@ static void hystart_update(struct sock *sk, u32 delay, u8 tdn)
 				NET_ADD_STATS(sock_net(sk),
 					      LINUX_MIB_TCPHYSTARTTRAINCWND,
 					      td_get_cwnd(tp, tdn));
-				td_set_ssthresh(tp, td_get_cwnd(tp, tdn), tdn);
+				td_set_ssthresh(tp, tdn, td_get_cwnd(tp, tdn));
 			}
 		}
 	}
@@ -440,7 +440,7 @@ static void hystart_update(struct sock *sk, u32 delay, u8 tdn)
 				NET_ADD_STATS(sock_net(sk),
 					      LINUX_MIB_TCPHYSTARTDELAYCWND,
 					      td_get_cwnd(tp, tdn));
-				td_set_ssthresh(tp, td_get_cwnd(tp, tdn), tdn);
+				td_set_ssthresh(tp, tdn, td_get_cwnd(tp, tdn));
 			}
 		}
 	}

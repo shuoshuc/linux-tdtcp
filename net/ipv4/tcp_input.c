@@ -2498,19 +2498,14 @@ static void tdtcp_undo_cwnd_reduction(struct sock *sk, const u8 tdn,
 	if (td_get_prior_ssthresh(tp, tdn)) {
 		const struct inet_connection_sock *icsk = inet_csk(sk);
 
-	/* This is where the ca_ops API diverges for TDTCP CC. */
-#if IS_ENABLED(CONFIG_TDTCP)
-		td_set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk, tdn), tdn);
-#else
-		td_set_cwnd(tp, icsk->icsk_ca_ops->undo_cwnd(sk), tdn);
-#endif
+		td_set_cwnd(tp, tdn, icsk->icsk_ca_ops->undo_cwnd(sk, tdn));
 
 		if (td_get_prior_ssthresh(tp, tdn) > td_get_ssthresh(tp, tdn)) {
-			td_set_ssthresh(tp, td_get_prior_ssthresh(tp, tdn), tdn);
+			td_set_ssthresh(tp, tdn, td_get_prior_ssthresh(tp, tdn));
 			tcp_ecn_withdraw_cwr(tp);
 		}
 	}
-	td_set_cwnd_stamp(tp, tcp_jiffies32, tdn);
+	td_set_cwnd_stamp(tp, tdn, tcp_jiffies32);
 	td_set_undo_marker(tp, tdn, 0);
 	tp->rack.advanced = 1; /* Force RACK to re-exam losses */
 }
@@ -2668,8 +2663,8 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
 	if (newly_acked_sacked <= 0 || WARN_ON_ONCE(!td_get_prior_cwnd(tp, tdn_id)))
 		return;
 
-	td_set_prr_delivered(tp, td_get_prr_delivered(tp, tdn_id) +
-			     newly_acked_sacked, tdn_id);
+	td_set_prr_delivered(tp, tdn_id, td_get_prr_delivered(tp, tdn_id) +
+			     newly_acked_sacked);
 	if (delta < 0) {
 		u64 dividend = (u64)td_get_ssthresh(tp, tdn_id) *
 			td_get_prr_delivered(tp, tdn_id) +
@@ -2687,7 +2682,7 @@ void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
 	}
 	/* Force a fast retransmit upon entering fast recovery */
 	sndcnt = max(sndcnt, (td_get_prr_out(tp, tdn_id) ? 0 : 1));
-	td_set_cwnd(tp, tdtcp_packets_in_flight(tp, tdn_id) + sndcnt, tdn_id);
+	td_set_cwnd(tp, tdn_id, tdtcp_packets_in_flight(tp, tdn_id) + sndcnt);
 
 	if (sk_is_tdtcp(sk)) {
 		pr_debug("cwnd_reduction: sk=%p, tdn=%u, cwnd %u->%u, ssthresh=%u, "
@@ -2725,8 +2720,8 @@ static inline void tdtcp_end_cwnd_reduction(struct sock *sk, const u8 tdn)
 	if (td_get_ssthresh(tp, tdn) < TCP_INFINITE_SSTHRESH &&
 	    (td_get_ca_state(sk, tdn) == TCP_CA_CWR ||
 	     td_get_undo_marker(tp, tdn))) {
-		td_set_cwnd(tp, td_get_ssthresh(tp, tdn), tdn);
-		td_set_cwnd_stamp(tp, tcp_jiffies32, tdn);
+		td_set_cwnd(tp, tdn, td_get_ssthresh(tp, tdn));
+		td_set_cwnd_stamp(tp, tdn, tcp_jiffies32);
 	}
 	tcp_ca_event(sk, CA_EVENT_COMPLETE_CWR);
 }
@@ -3253,7 +3248,7 @@ static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id)
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 
 	icsk->icsk_ca_ops->cong_avoid(sk, ack, acked, tdn_id);
-	td_set_cwnd_stamp(tcp_sk(sk), tcp_jiffies32, tdn_id);
+	td_set_cwnd_stamp(tcp_sk(sk), tdn_id, tcp_jiffies32);
 }
 
 /* Restart timer after forward progress on connection.

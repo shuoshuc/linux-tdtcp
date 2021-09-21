@@ -180,7 +180,7 @@ void tcp_init_congestion_control(struct sock *sk)
 	int i;
 
 	for (i = 0; i < MAX_NUM_TDNS; i++) {
-		td_set_prior_ssthresh(tcp_sk(sk), 0, i);
+		td_set_prior_ssthresh(tcp_sk(sk), i, 0);
 	}
 	if (icsk->icsk_ca_ops->init)
 		icsk->icsk_ca_ops->init(sk);
@@ -420,7 +420,7 @@ u32 tdtcp_slow_start(struct tcp_sock *tp, u32 acked, u8 tdn)
 	u32 cwnd = min(td_get_cwnd(tp, tdn) + acked, td_get_ssthresh(tp, tdn));
 
 	acked -= cwnd - td_get_cwnd(tp, tdn);
-	td_set_cwnd(tp, min(cwnd, tp->snd_cwnd_clamp), tdn);
+	td_set_cwnd(tp, tdn, min(cwnd, tp->snd_cwnd_clamp));
 
 	return acked;
 }
@@ -452,18 +452,18 @@ void tdtcp_cong_avoid_ai(struct tcp_sock *tp, u32 w, u32 acked, u8 tdn)
 {
 	/* If credits accumulated at a higher w, apply them gently now. */
 	if (td_get_cwnd_cnt(tp, tdn) >= w) {
-		td_set_cwnd_cnt(tp, 0, tdn);
-		td_set_cwnd(tp, td_get_cwnd(tp, tdn) + 1, tdn);
+		td_set_cwnd_cnt(tp, tdn, 0);
+		td_set_cwnd(tp, tdn, td_get_cwnd(tp, tdn) + 1);
 	}
 
-	td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn) + acked, tdn);
+	td_set_cwnd_cnt(tp, tdn, td_get_cwnd_cnt(tp, tdn) + acked);
 	if (td_get_cwnd_cnt(tp, tdn) >= w) {
 		u32 delta = td_get_cwnd_cnt(tp, tdn) / w;
 
-		td_set_cwnd_cnt(tp, td_get_cwnd_cnt(tp, tdn) - delta * w, tdn);
-		td_set_cwnd(tp, td_get_cwnd(tp, tdn) + delta, tdn);
+		td_set_cwnd_cnt(tp, tdn, td_get_cwnd_cnt(tp, tdn) - delta * w);
+		td_set_cwnd(tp, tdn, td_get_cwnd(tp, tdn) + delta);
 	}
-	td_set_cwnd(tp, min(td_get_cwnd(tp, tdn), tp->snd_cwnd_clamp), tdn);
+	td_set_cwnd(tp, tdn, min(td_get_cwnd(tp, tdn), tp->snd_cwnd_clamp));
 }
 EXPORT_SYMBOL_GPL(tdtcp_cong_avoid_ai);
 
