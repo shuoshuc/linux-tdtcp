@@ -580,7 +580,9 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs);
 int tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs);
 void tcp_retransmit_timer(struct sock *sk);
 void tcp_xmit_retransmit_queue(struct sock *);
+void tdtcp_xmit_retransmit_queue(struct sock *, const u8);
 void tcp_simple_retransmit(struct sock *);
+void tdtcp_simple_retransmit(struct sock *, const u8);
 void tcp_enter_recovery(struct sock *sk, bool ece_ack);
 int tcp_trim_head(struct sock *, struct sk_buff *, u32);
 enum tcp_queue {
@@ -1259,6 +1261,18 @@ static inline __u32 tcp_current_ssthresh(const struct sock *sk)
 		return max(td_ssthresh(tp),
 			   ((td_cwnd(tp) >> 1) +
 			    (td_cwnd(tp) >> 2)));
+}
+
+static inline __u32 tdtcp_current_ssthresh(const struct sock *sk, const u8 tdn)
+{
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (tdtcp_in_cwnd_reduction(sk, tdn))
+		return td_get_ssthresh(tp, tdn);
+	else
+		return max(td_get_ssthresh(tp, tdn),
+			   ((td_get_cwnd(tp, tdn) >> 1) +
+			    (td_get_cwnd(tp, tdn) >> 2)));
 }
 
 /* Use define here intentionally to get WARN_ON location shown at the caller */

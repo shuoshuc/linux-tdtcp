@@ -280,11 +280,28 @@ static inline u32 td_icsk_rto(const struct sock *sk)
 		TD_ICSK_RTO(inet_csk(sk), 0);
 }
 
+/* Return icsk_rto of given TDN or the default variable value. */
+static inline u32 td_get_icsk_rto(const struct sock *sk, const u8 tdn_id)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_ICSK_RTO(inet_csk(sk), tdn_id) :
+		TD_ICSK_RTO(inet_csk(sk), 0);
+}
+
 /* Assign val to icsk_rto of current TDN or the default variable. */
 static inline void set_icsk_rto(const struct sock *sk, u32 val)
 {
 	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_ICSK_RTO(inet_csk(sk), GET_TDN(tcp_sk(sk))) :
+		&TD_ICSK_RTO(inet_csk(sk), 0)) = val;
+}
+
+/* Assign val to icsk_rto of given TDN or the default variable. */
+static inline void td_set_icsk_rto(const struct sock *sk, const u8 tdn_id,
+				   u32 val)
+{
+	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_ICSK_RTO(inet_csk(sk), tdn_id) :
 		&TD_ICSK_RTO(inet_csk(sk), 0)) = val;
 }
 

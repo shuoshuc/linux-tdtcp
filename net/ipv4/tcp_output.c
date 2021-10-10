@@ -3228,15 +3228,15 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	bool rearm_timer = false;
 	u32 max_segs;
 	int mib_idx;
-    int k, pkts_out = 0;
+	int k, pkts_out = 0;
 	/* If TDTCP is not enabled, there is 1 TDN and current TDN ID is always
 	 * 0 for backwards compatibility. Accessing the td_*() subflow variables
 	 * will be automatically redirected to the default ones.
 	 */
 	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
 
-    /* This quick check only holds if pkts_out is 0 in all TDNs, which means
-     * the rtx_queue is empty and hence nothing to send.
+	/* This quick check only holds if pkts_out is 0 in all TDNs, which means
+	 * the rtx_queue is empty and hence nothing to send.
 	 */
 	for (k = 0; k < num_tdns; k++) {
 		pkts_out += td_get_pkts_out(tp, k);
@@ -3303,6 +3303,81 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 	if (rearm_timer)
 		tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				     td_icsk_rto(sk),
+				     TCP_RTO_MAX);
+}
+
+void tdtcp_xmit_retransmit_queue(struct sock *sk, const u8 tdn)
+{
+	const struct inet_connection_sock *icsk = inet_csk(sk);
+	struct sk_buff *skb, *rtx_head, *hole = NULL;
+	struct tcp_sock *tp = tcp_sk(sk);
+	bool rearm_timer = false;
+	u32 max_segs;
+	int mib_idx;
+
+	if (!td_get_pkts_out(tp, tdn))
+		return;
+
+	rtx_head = tcp_rtx_queue_head(sk);
+	skb = tp->retransmit_skb_hint ?: rtx_head;
+	max_segs = tcp_tso_segs(sk, tcp_current_mss(sk));
+	skb_rbtree_walk_from(skb) {
+		__u8 sacked;
+		int segs;
+
+		if (tcp_pacing_check(sk))
+			break;
+
+		/* we could do better than to assign each time */
+		if (!hole)
+			tp->retransmit_skb_hint = skb;
+
+		segs = td_get_cwnd(tp, tdn) - tdtcp_packets_in_flight(tp, tdn);
+		if (segs <= 0)
+			break;
+		sacked = TCP_SKB_CB(skb)->sacked;
+		/* In case tcp_shift_skb_data() have aggregated large skbs,
+		 * we need to make sure not sending too bigs TSO packets
+		 */
+		segs = min_t(int, segs, max_segs);
+
+		if (td_get_retrans_out(tp, tdn) >= td_get_lost_out(tp, tdn)) {
+			break;
+		} else if (!(sacked & TCPCB_LOST)) {
+			if (!hole && !(sacked & (TCPCB_SACKED_RETRANS|TCPCB_SACKED_ACKED)))
+				hole = skb;
+			continue;
+
+		} else {
+			if (td_get_ca_state(sk, tdn) != TCP_CA_Loss)
+				mib_idx = LINUX_MIB_TCPFASTRETRANS;
+			else
+				mib_idx = LINUX_MIB_TCPSLOWSTARTRETRANS;
+		}
+
+		if (sacked & (TCPCB_SACKED_ACKED|TCPCB_SACKED_RETRANS))
+			continue;
+
+		if (tcp_small_queue_check(sk, skb, 1))
+			break;
+
+		if (tcp_retransmit_skb(sk, skb, segs))
+			break;
+
+		NET_ADD_STATS(sock_net(sk), mib_idx, tcp_skb_pcount(skb));
+
+		if (tdtcp_in_cwnd_reduction(sk, tdn))
+			td_set_prr_out(tp, tdn,
+				       td_get_prr_out(tp, tdn) + tcp_skb_pcount(skb));
+
+		if (skb == rtx_head &&
+		    icsk->icsk_pending != ICSK_TIME_REO_TIMEOUT)
+			rearm_timer = true;
+
+	}
+	if (rearm_timer)
+		tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
+				     td_get_icsk_rto(sk, tdn),
 				     TCP_RTO_MAX);
 }
 

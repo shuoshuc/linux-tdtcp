@@ -2060,6 +2060,13 @@ static inline void tcp_init_undo(struct tcp_sock *tp)
 	set_undo_retrans(tp, td_retrans_out(tp) ? : -1);
 }
 
+static inline void tdtcp_init_undo(struct tcp_sock *tp, const u8 tdn)
+{
+	td_set_undo_marker(tp, tdn, tp->snd_una);
+	/* Retransmission still in flight may cause DSACKs later. */
+	td_set_undo_retrans(tp, tdn, td_get_retrans_out(tp, tdn) ? : -1);
+}
+
 static bool tcp_is_rack(const struct sock *sk)
 {
 	return sock_net(sk)->ipv4.sysctl_tcp_recovery & TCP_RACK_LOSS_DETECTION;
@@ -2178,9 +2185,10 @@ static bool tcp_check_sack_reneging(struct sock *sk, int flag)
  * they differ. Since neither occurs due to loss, TCP should really
  * ignore them.
  */
-static inline int tcp_dupack_heuristics(const struct tcp_sock *tp)
+static inline int tdtcp_dupack_heuristics(const struct tcp_sock *tp,
+					  const u8 tdn)
 {
-	return td_sacked_out(tp) + 1;
+	return td_get_sacked_out(tp, tdn) + 1;
 }
 
 /* Linux NewReno/SACK/ECN state machine.
@@ -2280,16 +2288,17 @@ static inline int tcp_dupack_heuristics(const struct tcp_sock *tp)
  * Main question: may we further continue forward transmission
  * with the same cwnd?
  */
-static bool tcp_time_to_recover(struct sock *sk, int flag)
+static bool tdtcp_time_to_recover(struct sock *sk, const u8 tdn, int flag)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	/* Trick#1: The loss is proven. */
-	if (td_lost_out(tp))
+	if (td_get_lost_out(tp, tdn))
 		return true;
 
 	/* Not-A-Trick#2 : Classic rule... */
-	if (!tcp_is_rack(sk) && tcp_dupack_heuristics(tp) > td_reordering(tp))
+	if (!tcp_is_rack(sk) &&
+	    tdtcp_dupack_heuristics(tp, tdn) > td_get_reordering(tp, tdn))
 		return true;
 
 	return false;
@@ -2300,7 +2309,8 @@ static bool tcp_time_to_recover(struct sock *sk, int flag)
  * has at least tp->reordering SACKed seqments above it; "packets" refers to
  * the maximum SACKed segments to pass before reaching this limit.
  */
-static void tcp_mark_head_lost(struct sock *sk, int packets, int mark_head)
+static void tdtcp_mark_head_lost(struct sock *sk, const u8 tdn, int packets,
+				 int mark_head)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct sk_buff *skb;
@@ -2308,7 +2318,7 @@ static void tcp_mark_head_lost(struct sock *sk, int packets, int mark_head)
 	/* Use SACK to deduce losses of new sequences sent during recovery */
 	const u32 loss_high = tp->snd_nxt;
 
-	WARN_ON(packets > td_pkts_out(tp));
+	WARN_ON(packets > td_get_pkts_out(tp, tdn));
 	skb = tp->lost_skb_hint;
 	if (skb) {
 		/* Head already handled? */
@@ -2340,21 +2350,23 @@ static void tcp_mark_head_lost(struct sock *sk, int packets, int mark_head)
 		if (mark_head)
 			break;
 	}
-	tcp_verify_left_out(tp);
+	tdtcp_verify_left_out(tp, tdn);
 }
 
 /* Account newly detected lost packet(s) */
 
-static void tcp_update_scoreboard(struct sock *sk, int fast_rexmit)
+static void tdtcp_update_scoreboard(struct sock *sk, const u8 tdn,
+				    int fast_rexmit)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (tcp_is_sack(tp)) {
-		int sacked_upto = td_sacked_out(tp) - td_reordering(tp);
+		int sacked_upto = td_get_sacked_out(tp, tdn) -
+			td_get_reordering(tp, tdn);
 		if (sacked_upto >= 0)
-			tcp_mark_head_lost(sk, sacked_upto, 0);
+			tdtcp_mark_head_lost(sk, tdn, sacked_upto, 0);
 		else if (fast_rexmit)
-			tcp_mark_head_lost(sk, 1, 1);
+			tdtcp_mark_head_lost(sk, tdn, 1, 1);
 	}
 }
 
@@ -2698,6 +2710,20 @@ static void tcp_init_cwnd_reduction(struct sock *sk)
 	tcp_ecn_queue_cwr(tp);
 }
 
+static void tdtcp_init_cwnd_reduction(struct sock *sk, const u8 tdn)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	td_set_high_seq(tp, tdn, tp->snd_nxt);
+	tp->tlp_high_seq = 0;
+	td_set_cwnd_cnt(tp, tdn, 0);
+	td_set_prior_cwnd(tp, tdn, td_get_cwnd(tp, tdn));
+	td_set_prr_delivered(tp, tdn, 0);
+	td_set_prr_out(tp, tdn, 0);
+	td_set_ssthresh(tp, tdn, inet_csk(sk)->icsk_ca_ops->ssthresh(sk));
+	tcp_ecn_queue_cwr(tp);
+}
+
 void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
 			const u8 tdn_id)
 {
@@ -2814,20 +2840,20 @@ static void tdtcp_try_keep_open(struct sock *sk, const u8 tdn)
 	}
 }
 
-static void tcp_try_to_open(struct sock *sk, int flag)
+static void tdtcp_try_to_open(struct sock *sk, const u8 tdn, int flag)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	tcp_verify_left_out(tp);
+	tdtcp_verify_left_out(tp, tdn);
 
-	if (!tcp_any_retrans_done(sk))
-		set_retrans_stamp(tp, 0);
+	if (!tdtcp_any_retrans_done(sk, tdn))
+		td_set_retrans_stamp(tp, tdn, 0);
 
 	if (flag & FLAG_ECE)
 		tcp_enter_cwr(sk);
 
-	if (td_ca_state(sk) != TCP_CA_CWR) {
-		tcp_try_keep_open(sk);
+	if (td_get_ca_state(sk, tdn) != TCP_CA_CWR) {
+		tdtcp_try_keep_open(sk, tdn);
 	}
 }
 
@@ -2911,6 +2937,53 @@ void tcp_simple_retransmit(struct sock *sk)
 }
 EXPORT_SYMBOL(tcp_simple_retransmit);
 
+void tdtcp_simple_retransmit(struct sock *sk, const u8 tdn)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	struct sk_buff *skb;
+	unsigned int mss = tcp_current_mss(sk);
+	u8 retx_tdn;
+
+	skb_rbtree_walk(skb, &sk->tcp_rtx_queue) {
+		if (tcp_skb_seglen(skb) > mss &&
+		    !(TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)) {
+			if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS) {
+				TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_RETRANS;
+				retx_tdn = sk_is_tdtcp(sk) ?
+					TCP_SKB_CB(skb)->retx_tdn_id : 0;
+				td_set_retrans_out(tp, retx_tdn,
+					td_get_retrans_out(tp, retx_tdn) - tcp_skb_pcount(skb));
+			}
+			tcp_skb_mark_lost_uncond_verify(tp, skb);
+		}
+	}
+
+	tcp_clear_retrans_hints_partial(tp);
+
+	if (!td_get_lost_out(tp, tdn))
+		return;
+
+	if (tcp_is_reno(tp))
+		tcp_limit_reno_sacked(tp);
+
+	tdtcp_verify_left_out(tp, tdn);
+
+	/* Don't muck with the congestion window here.
+	 * Reason is that we do not increase amount of _data_
+	 * in network, but units changed and effective
+	 * cwnd/ssthresh really reduced now.
+	 */
+	if (td_get_ca_state(sk, tdn) != TCP_CA_Loss) {
+		td_set_high_seq(tp, tdn, tp->snd_nxt);
+		td_set_ssthresh(tp, tdn, tdtcp_current_ssthresh(sk, tdn));
+		td_set_prior_ssthresh(tp, tdn, 0);
+		td_set_undo_marker(tp, tdn, 0);
+		tdtcp_set_ca_state(sk, tdn, TCP_CA_Loss);
+	}
+	tdtcp_xmit_retransmit_queue(sk, tdn);
+}
+EXPORT_SYMBOL(tdtcp_simple_retransmit);
+
 void tcp_enter_recovery(struct sock *sk, bool ece_ack)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -2932,6 +3005,30 @@ void tcp_enter_recovery(struct sock *sk, bool ece_ack)
 		tcp_init_cwnd_reduction(sk);
 	}
 	tcp_set_ca_state(sk, TCP_CA_Recovery);
+}
+
+void tdtcp_enter_recovery(struct sock *sk, const u8 tdn, bool ece_ack)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	int mib_idx;
+
+	if (tcp_is_reno(tp))
+		mib_idx = LINUX_MIB_TCPRENORECOVERY;
+	else
+		mib_idx = LINUX_MIB_TCPSACKRECOVERY;
+
+	NET_INC_STATS(sock_net(sk), mib_idx);
+
+	td_set_prior_ssthresh(tp, tdn, 0);
+	tdtcp_init_undo(tp, tdn);
+
+	if (!tdtcp_in_cwnd_reduction(sk, tdn)) {
+		if (!ece_ack)
+			td_set_prior_ssthresh(tp, tdn,
+					      tdtcp_current_ssthresh(sk, tdn));
+		tdtcp_init_cwnd_reduction(sk, tdn);
+	}
+	tdtcp_set_ca_state(sk, tdn, TCP_CA_Recovery);
 }
 
 /* Process an ACK in CA_Loss state. Move to CA_Open if lost data are
@@ -3189,49 +3286,33 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 			tcp_add_reno_sack(sk, num_dupack);
 		}
 
-		if (td_ca_state(sk) <= TCP_CA_Disorder)
+		if (td_get_ca_state(sk, tdn) <= TCP_CA_Disorder)
 			tdtcp_try_undo_dsack(sk, tdn);
 
-		tcp_identify_packet_loss(sk, ack_flag);
-		if (!tcp_time_to_recover(sk, flag)) {
-			tcp_try_to_open(sk, flag);
+		tdtcp_identify_packet_loss(sk, ack_flag, tdn);
+		if (!tdtcp_time_to_recover(sk, tdn, flag)) {
+			tdtcp_try_to_open(sk, tdn, flag);
 			return;
 		}
 
 		/* MTU probe failure: don't reduce cwnd */
-		if (td_ca_state(sk) < TCP_CA_CWR &&
+		if (td_get_ca_state(sk, tdn) < TCP_CA_CWR &&
 		    icsk->icsk_mtup.probe_size &&
 		    tp->snd_una == tp->mtu_probe.probe_seq_start) {
 			tcp_mtup_probe_failed(sk);
 			/* Restores the reduction we did in tcp_mtup_probe() */
-			set_cwnd(tp, td_cwnd(tp) + 1);
-			tcp_simple_retransmit(sk);
+			td_set_cwnd(tp, tdn, td_get_cwnd(tp, tdn) + 1);
+			tdtcp_simple_retransmit(sk, tdn);
 			return;
 		}
 
-		u8 prev_ca_state2 = td_ca_state(sk);
-		u32 prev_cwnd2 = td_cwnd(tp);
-		u32 prev_ssthresh2 = td_ssthresh(tp);
-		u32 snd_una2 = tp->snd_una;
-		u32 high_seq2 = td_high_seq(tp);
-
 		/* Otherwise enter Recovery state */
-		tcp_enter_recovery(sk, (flag & FLAG_ECE));
+		tdtcp_enter_recovery(sk, tdn, (flag & FLAG_ECE));
 		fast_rexmit = 1;
-
-		pr_debug("[enter recovery] sk=%p, tdn=%u, ca_state %u->%u, "
-			 "cwnd %u->%u, ssthresh %u->%u, pkts_in_flight=%u, "
-			 "pkts_out=%u, sacked_out=%u, lost_out=%u, retrans_out=%u, "
-			 "snd_una=%u, high_seq=%u.\n",
-			 sk, GET_TDN(tp), prev_ca_state2, td_ca_state(sk),
-			 prev_cwnd2, td_cwnd(tp), prev_ssthresh2, td_ssthresh(tp),
-			 tcp_packets_in_flight(tp), td_pkts_out(tp),
-			 td_sacked_out(tp), td_lost_out(tp), td_retrans_out(tp),
-			 snd_una2, high_seq2);
 	}
 
 	if (!tcp_is_rack(sk) && do_lost)
-		tcp_update_scoreboard(sk, fast_rexmit);
+		tdtcp_update_scoreboard(sk, tdn, fast_rexmit);
 	*rexmit = REXMIT_LOST;
 }
 
