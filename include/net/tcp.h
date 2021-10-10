@@ -1895,7 +1895,12 @@ static inline void tcp_push_pending_frames(struct sock *sk)
  */
 static inline u32 tcp_highest_sack_seq(struct tcp_sock *tp)
 {
-	if (!td_sacked_out(tp))
+	u8 num_tdns = IS_ENABLED(CONFIG_TDTCP) ? tp->num_tdns : 1;
+	u32 sack_out = 0, i;
+	for (i = 0; i < num_tdns; i++) {
+		sack_out += td_get_sacked_out(tp, i);
+	}
+	if (!sack_out)
 		return tp->snd_una;
 
 	if (tp->highest_sack == NULL)

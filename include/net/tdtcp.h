@@ -46,7 +46,7 @@ static inline u8 GET_TDN(const struct tcp_sock *tp) {
 static inline u8 GET_GLOBAL_TDN(void) {
 	return 0xFF;
 }
-static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
+static inline void SET_TDN(struct tcp_sock *tp, const u8 val) {
 	WRITE_ONCE(tp->curr_tdn_id, val);
 }
 #else
@@ -59,7 +59,7 @@ static inline u8 GET_TDN(const struct tcp_sock *tp) {
 static inline u8 GET_GLOBAL_TDN(void) {
 	return READ_ONCE(global_tdn_id);
 }
-static inline void SET_TDN(struct tcp_sock *tp, u8 val) {
+static inline void SET_TDN(struct tcp_sock *tp, const u8 val) {
 	WRITE_ONCE(global_tdn_id, val);
 }
 /* FLASEW_XXX: same thing as the per socket SET_TDN */
@@ -160,7 +160,7 @@ void tdtcp_parse_options(const struct tcphdr *th, const unsigned char *ptr,
 
 /* Populates SKB CB with TDDA FLG_D metadata. */
 void tdtcp_set_skb_tdda(const struct sk_buff *skb, const struct sock *sk,
-			u8 flags);
+			const u8 flags);
 
 /* Return sk_pacing_rate of current TDN or the default variable value. */
 static inline unsigned long td_pacing_rate(const struct sock *sk)
@@ -170,7 +170,7 @@ static inline unsigned long td_pacing_rate(const struct sock *sk)
 }
 
 /* Return sk_pacing_rate of given TDN or the default variable value. */
-static inline unsigned long td_get_pacing_rate(const struct sock *sk, u8 tdn_id)
+static inline unsigned long td_get_pacing_rate(const struct sock *sk, const u8 tdn_id)
 {
 	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PACING_RATE(sk, tdn_id) : TD_PACING_RATE(sk, 0);
@@ -199,7 +199,7 @@ static inline void td_set_pacing_rate(struct sock *sk, const u8 tdn_id,
 }
 
 /* Return ca_state of current TDN or the default variable value. */
-static inline u8 td_ca_state(const struct sock *sk)
+static inline const u8 td_ca_state(const struct sock *sk)
 {
 	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CA_STATE(inet_csk(sk), GET_TDN(tcp_sk(sk))) :
@@ -207,7 +207,7 @@ static inline u8 td_ca_state(const struct sock *sk)
 }
 
 /* Return ca_state of given TDN or the default variable value. */
-static inline u8 td_get_ca_state(const struct sock *sk, u8 tdn_id)
+static inline const u8 td_get_ca_state(const struct sock *sk, const u8 tdn_id)
 {
 	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CA_STATE(inet_csk(sk), tdn_id) : TD_CA_STATE(inet_csk(sk), 0);
@@ -217,7 +217,7 @@ static inline u8 td_get_ca_state(const struct sock *sk, u8 tdn_id)
 /* Note: icsk_ca_state is a bit field, we cannot use the same ptr dereference
  * trick to compactly assign to different variables.
  */
-static inline void set_ca_state(struct sock *sk, u8 val)
+static inline void set_ca_state(struct sock *sk, const u8 val)
 {
 	if (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
 		TD_CA_STATE(inet_csk(sk), GET_TDN(tcp_sk(sk))) = val;
@@ -230,7 +230,7 @@ static inline void set_ca_state(struct sock *sk, u8 val)
 /* Note: icsk_ca_state is a bit field, we cannot use the same ptr dereference
  * trick to compactly assign to different variables.
  */
-static inline void td_set_ca_state(struct sock *sk, u8 tdn_id, u8 val)
+static inline void td_set_ca_state(struct sock *sk, const u8 tdn_id, const u8 val)
 {
 	if (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
 		TD_CA_STATE(inet_csk(sk), tdn_id) = val;
@@ -240,7 +240,7 @@ static inline void td_set_ca_state(struct sock *sk, u8 tdn_id, u8 val)
 }
 
 /* Return icsk_retransmits of current TDN or the default variable value. */
-static inline u8 td_icsk_rexmits(const struct sock *sk)
+static inline const u8 td_icsk_rexmits(const struct sock *sk)
 {
 	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_ICSK_REXMITS(inet_csk(sk), GET_TDN(tcp_sk(sk))) :
@@ -248,7 +248,7 @@ static inline u8 td_icsk_rexmits(const struct sock *sk)
 }
 
 /* Assign val to icsk_retransmits of current TDN or the default variable. */
-static inline void set_icsk_rexmits(const struct sock *sk, u8 val)
+static inline void set_icsk_rexmits(const struct sock *sk, const u8 val)
 {
 	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_ICSK_REXMITS(inet_csk(sk), GET_TDN(tcp_sk(sk))) :
@@ -279,7 +279,7 @@ static inline u32 td_cwnd(const struct tcp_sock *tp)
 }
 
 /* Return the cwnd of given TDN or the default snd_cwnd. */
-static inline u32 td_get_cwnd(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_cwnd(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CWND(tp, tdn_id) : TD_CWND(tp, 0);
@@ -293,7 +293,7 @@ static inline void set_cwnd(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to cwnd of given TDN or the default variable. */
-static inline void td_set_cwnd(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_cwnd(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_CWND(tp, tdn_id) : &TD_CWND(tp, 0)) = val;
@@ -307,7 +307,7 @@ static inline bool td_cwnd_limited(const struct tcp_sock *tp)
 }
 
 /* Return is_cwnd_limited of given TDN or the default variable value. */
-static inline bool td_get_cwnd_limited(const struct tcp_sock *tp, u8 tdn_id)
+static inline bool td_get_cwnd_limited(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CWND_LIMITED(tp, tdn_id) : TD_CWND_LIMITED(tp, 0);
@@ -334,7 +334,7 @@ static inline u32 td_max_pkts_out(const struct tcp_sock *tp)
 }
 
 /* Return is_cwnd_limited of given TDN or the default variable value. */
-static inline u32 td_get_max_pkts_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_max_pkts_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_MAX_PKTS_OUT(tp, tdn_id) : TD_MAX_PKTS_OUT(tp, 0);
@@ -348,7 +348,7 @@ static inline void set_max_pkts_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to max_packets_out of given TDN or the default variable. */
-static inline void td_set_max_pkts_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_max_pkts_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_MAX_PKTS_OUT(tp, tdn_id) : &TD_MAX_PKTS_OUT(tp, 0)) = val;
@@ -376,7 +376,7 @@ static inline u32 td_pkts_out(const struct tcp_sock *tp)
 }
 
 /* Return packets_out of given TDN or the default variable value. */
-static inline u32 td_get_pkts_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_pkts_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PKTS_OUT(tp, tdn_id) : TD_PKTS_OUT(tp, 0);
@@ -390,7 +390,7 @@ static inline void set_pkts_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to packets_out of given TDN or the default variable. */
-static inline void td_set_pkts_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_pkts_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PKTS_OUT(tp, tdn_id) : &TD_PKTS_OUT(tp, 0)) = val;
@@ -432,7 +432,7 @@ static inline u32 td_ssthresh(const struct tcp_sock *tp)
 }
 
 /* Return snd_ssthresh of given TDN or the default variable value. */
-static inline u32 td_get_ssthresh(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_ssthresh(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_SSTHRESH(tp, tdn_id) : TD_SSTHRESH(tp, 0);
@@ -446,7 +446,7 @@ static inline void set_ssthresh(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to snd_ssthresh of given TDN or the default variable. */
-static inline void td_set_ssthresh(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_ssthresh(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_SSTHRESH(tp, tdn_id) : &TD_SSTHRESH(tp, 0)) = val;
@@ -460,7 +460,7 @@ static inline u32 td_prior_cwnd(const struct tcp_sock *tp)
 }
 
 /* Return prior_cwnd of given TDN or the default variable value. */
-static inline u32 td_get_prior_cwnd(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_prior_cwnd(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PRIOR_CWND(tp, tdn_id) : TD_PRIOR_CWND(tp, 0);
@@ -474,7 +474,7 @@ static inline void set_prior_cwnd(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to prior_cwnd of given TDN or the default variable. */
-static inline void td_set_prior_cwnd(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_prior_cwnd(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRIOR_CWND(tp, tdn_id) : &TD_PRIOR_CWND(tp, 0)) = val;
@@ -488,7 +488,7 @@ static inline u32 td_prior_ssthresh(const struct tcp_sock *tp)
 }
 
 /* Return prior_ssthresh of given TDN or the default variable value. */
-static inline u32 td_get_prior_ssthresh(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_prior_ssthresh(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PRIOR_SSTHRESH(tp, tdn_id) : TD_PRIOR_SSTHRESH(tp, 0);
@@ -502,7 +502,7 @@ static inline void set_prior_ssthresh(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to prior_ssthresh of given TDN or the default variable. */
-static inline void td_set_prior_ssthresh(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_prior_ssthresh(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRIOR_SSTHRESH(tp, tdn_id) : &TD_PRIOR_SSTHRESH(tp, 0)) = val;
@@ -516,7 +516,7 @@ static inline u32 td_cwnd_cnt(const struct tcp_sock *tp)
 }
 
 /* Return snd_cnwd_cnt of given TDN or the default variable value. */
-static inline u32 td_get_cwnd_cnt(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_cwnd_cnt(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CWND_CNT(tp, tdn_id) : TD_CWND_CNT(tp, 0);
@@ -530,7 +530,7 @@ static inline void set_cwnd_cnt(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to snd_cwnd_cnt of given TDN or the default variable. */
-static inline void td_set_cwnd_cnt(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_cwnd_cnt(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_CWND_CNT(tp, tdn_id) : &TD_CWND_CNT(tp, 0)) = val;
@@ -544,7 +544,7 @@ static inline u32 td_cwnd_stamp(const struct tcp_sock *tp)
 }
 
 /* Return snd_cnwd_stamp of given TDN or the default variable value. */
-static inline u32 td_get_cwnd_stamp(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_cwnd_stamp(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_CWND_STAMP(tp, tdn_id) : TD_CWND_STAMP(tp, 0);
@@ -558,7 +558,7 @@ static inline void set_cwnd_stamp(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to snd_cwnd_stamp of given TDN or the default variable. */
-static inline void td_set_cwnd_stamp(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_cwnd_stamp(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_CWND_STAMP(tp, tdn_id) : &TD_CWND_STAMP(tp, 0)) = val;
@@ -586,7 +586,7 @@ static inline u32 td_retrans_out(const struct tcp_sock *tp)
 }
 
 /* Return retrans_out of given TDN or the default variable value. */
-static inline u32 td_get_retrans_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_retrans_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_RETRANS_OUT(tp, tdn_id) : TD_RETRANS_OUT(tp, 0);
@@ -600,7 +600,7 @@ static inline void set_retrans_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to retrans_out of given TDN or the default variable. */
-static inline void td_set_retrans_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_retrans_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_RETRANS_OUT(tp, tdn_id) : &TD_RETRANS_OUT(tp, 0)) = val;
@@ -614,7 +614,7 @@ static inline u32 td_lost_out(const struct tcp_sock *tp)
 }
 
 /* Return lost_out of given TDN or the default variable value. */
-static inline u32 td_get_lost_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_lost_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_LOST_OUT(tp, tdn_id) : TD_LOST_OUT(tp, 0);
@@ -628,7 +628,7 @@ static inline void set_lost_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to lost_out of given TDN or the default variable. */
-static inline void td_set_lost_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_lost_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_LOST_OUT(tp, tdn_id) : &TD_LOST_OUT(tp, 0)) = val;
@@ -642,7 +642,7 @@ static inline u32 td_sacked_out(const struct tcp_sock *tp)
 }
 
 /* Return sacked_out of given TDN or the default variable value. */
-static inline u32 td_get_sacked_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_sacked_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_SACKED_OUT(tp, tdn_id) : TD_SACKED_OUT(tp, 0);
@@ -656,7 +656,7 @@ static inline void set_sacked_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to sacked_out of given TDN or the default variable. */
-static inline void td_set_sacked_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_sacked_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_SACKED_OUT(tp, tdn_id) : &TD_SACKED_OUT(tp, 0)) = val;
@@ -670,7 +670,7 @@ static inline u32 td_prr_delivered(const struct tcp_sock *tp)
 }
 
 /* Return prr_delivered of given TDN or the default variable value. */
-static inline u32 td_get_prr_delivered(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_prr_delivered(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PRR_DELIVERED(tp, tdn_id) : TD_PRR_DELIVERED(tp, 0);
@@ -684,7 +684,7 @@ static inline void set_prr_delivered(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to prr_delivered of given TDN or the default variable. */
-static inline void td_set_prr_delivered(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_prr_delivered(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRR_DELIVERED(tp, tdn_id) : &TD_PRR_DELIVERED(tp, 0)) = val;
@@ -698,7 +698,7 @@ static inline u32 td_prr_out(const struct tcp_sock *tp)
 }
 
 /* Return prr_out of given TDN or the default variable value. */
-static inline u32 td_get_prr_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_prr_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_PRR_OUT(tp, tdn_id) : TD_PRR_OUT(tp, 0);
@@ -712,7 +712,7 @@ static inline void set_prr_out(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to prr_out of given TDN or the default variable. */
-static inline void td_set_prr_out(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_prr_out(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_PRR_OUT(tp, tdn_id) : &TD_PRR_OUT(tp, 0)) = val;
@@ -726,7 +726,7 @@ static inline u32 td_delivered(const struct tcp_sock *tp)
 }
 
 /* Return delivered of given TDN or the default variable value. */
-static inline u32 td_get_delivered(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_delivered(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_DELIVERED(tp, tdn_id) : TD_DELIVERED(tp, 0);
@@ -740,7 +740,7 @@ static inline void set_delivered(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to delivered of given TDN or the default variable. */
-static inline void td_set_delivered(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_delivered(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_DELIVERED(tp, tdn_id) : &TD_DELIVERED(tp, 0)) = val;
@@ -754,7 +754,7 @@ static inline int td_undo_retrans(const struct tcp_sock *tp)
 }
 
 /* Return undo_retrans of given TDN or the default variable value. */
-static inline int td_get_undo_retrans(const struct tcp_sock *tp, u8 tdn_id)
+static inline int td_get_undo_retrans(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_UNDO_RETRANS(tp, tdn_id) : TD_UNDO_RETRANS(tp, 0);
@@ -768,7 +768,7 @@ static inline void set_undo_retrans(struct tcp_sock *tp, int val)
 }
 
 /* Assign val to undo_retrans of given TDN or the default variable. */
-static inline void td_set_undo_retrans(struct tcp_sock *tp, u8 tdn_id, int val)
+static inline void td_set_undo_retrans(struct tcp_sock *tp, const u8 tdn_id, int val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_UNDO_RETRANS(tp, tdn_id) : &TD_UNDO_RETRANS(tp, 0)) = val;
@@ -782,7 +782,7 @@ static inline u32 td_retrans_stamp(const struct tcp_sock *tp)
 }
 
 /* Return retrans_stamp of given TDN or the default variable value. */
-static inline u32 td_get_retrans_stamp(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_retrans_stamp(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_RETRANS_STAMP(tp, tdn_id) : TD_RETRANS_STAMP(tp, 0);
@@ -796,7 +796,7 @@ static inline void set_retrans_stamp(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to retrans_stamp of given TDN or the default variable. */
-static inline void td_set_retrans_stamp(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_retrans_stamp(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_RETRANS_STAMP(tp, tdn_id) : &TD_RETRANS_STAMP(tp, 0)) = val;
@@ -810,7 +810,7 @@ static inline u32 td_reordering(const struct tcp_sock *tp)
 }
 
 /* Return reordering of given TDN or the default variable value. */
-static inline u32 td_get_reordering(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_reordering(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_REORDERING(tp, tdn_id) : TD_REORDERING(tp, 0);
@@ -824,7 +824,7 @@ static inline void set_reordering(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to reordering of given TDN or the default variable. */
-static inline void td_set_reordering(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_reordering(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_REORDERING(tp, tdn_id) : &TD_REORDERING(tp, 0)) = val;
@@ -838,7 +838,7 @@ static inline u32 td_high_seq(const struct tcp_sock *tp)
 }
 
 /* Return high_seq of given TDN or the default variable value. */
-static inline u32 td_get_high_seq(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_high_seq(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_HIGH_SEQ(tp, tdn_id) : TD_HIGH_SEQ(tp, 0);
@@ -852,7 +852,7 @@ static inline void set_high_seq(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to high_seq of given TDN or the default variable. */
-static inline void td_set_high_seq(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_high_seq(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_HIGH_SEQ(tp, tdn_id) : &TD_HIGH_SEQ(tp, 0)) = val;
@@ -866,7 +866,7 @@ static inline u32 td_undo_marker(const struct tcp_sock *tp)
 }
 
 /* Return undo_marker of given TDN or the default variable value. */
-static inline u32 td_get_undo_marker(const struct tcp_sock *tp, u8 tdn_id)
+static inline u32 td_get_undo_marker(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		TD_UNDO_MARKER(tp, tdn_id) : TD_UNDO_MARKER(tp, 0);
@@ -880,7 +880,7 @@ static inline void set_undo_marker(struct tcp_sock *tp, u32 val)
 }
 
 /* Assign val to undo_marker of given TDN or the default variable. */
-static inline void td_set_undo_marker(struct tcp_sock *tp, u8 tdn_id, u32 val)
+static inline void td_set_undo_marker(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_UNDO_MARKER(tp, tdn_id) : &TD_UNDO_MARKER(tp, 0)) = val;
@@ -889,19 +889,19 @@ static inline void td_set_undo_marker(struct tcp_sock *tp, u8 tdn_id, u32 val)
 /* TDTCP version of tcp_in_cwnd_reduction(). Check CA state of given TDN instead
  * of the current TDN.
  */
-static inline bool tdtcp_in_cwnd_reduction(const struct sock *sk, u8 tdn_id)
+static inline bool tdtcp_in_cwnd_reduction(const struct sock *sk, const u8 tdn_id)
 {
 	return (TCPF_CA_CWR | TCPF_CA_Recovery) &
 	       (1 << td_get_ca_state(sk, tdn_id));
 }
 
-static inline unsigned int tdtcp_left_out(const struct tcp_sock *tp, u8 tdn_id)
+static inline unsigned int tdtcp_left_out(const struct tcp_sock *tp, const u8 tdn_id)
 {
 	return td_get_sacked_out(tp, tdn_id) + td_get_lost_out(tp, tdn_id);
 }
 
 static inline unsigned int tdtcp_packets_in_flight(const struct tcp_sock *tp,
-						   u8 tdn_id)
+						   const u8 tdn_id)
 {
 	return td_get_pkts_out(tp, tdn_id) - tdtcp_left_out(tp, tdn_id) +
 		td_get_retrans_out(tp, tdn_id);
