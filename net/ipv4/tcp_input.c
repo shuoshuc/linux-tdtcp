@@ -2653,6 +2653,28 @@ static bool tcp_try_undo_loss(struct sock *sk, bool frto_undo)
 	return false;
 }
 
+static bool tdtcp_try_undo_loss(struct sock *sk, const u8 tdn, bool frto_undo)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (frto_undo || tdtcp_may_undo(tp, tdn)) {
+		tdtcp_undo_cwnd_reduction(sk, tdn, true);
+
+		DBGUNDO(sk, "partial loss");
+		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPLOSSUNDO);
+		if (frto_undo)
+			NET_INC_STATS(sock_net(sk),
+					LINUX_MIB_TCPSPURIOUSRTOS);
+		td_set_icsk_rexmits(sk, tdn, 0);
+		if (frto_undo || tcp_is_sack(tp)) {
+			tdtcp_set_ca_state(sk, tdn, TCP_CA_Open);
+			tp->is_sack_reneg = 0;
+		}
+		return true;
+	}
+	return false;
+}
+
 /* The cwnd reduction in CWR and Recovery uses the PRR algorithm in RFC 6937.
  * It computes the number of packets to send (sndcnt) based on packets newly
  * delivered:
@@ -2915,14 +2937,14 @@ void tcp_enter_recovery(struct sock *sk, bool ece_ack)
 /* Process an ACK in CA_Loss state. Move to CA_Open if lost data are
  * recovered or spurious. Otherwise retransmits more on partial ACKs.
  */
-static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
-			     int *rexmit)
+static void tdtcp_process_loss(struct sock *sk, int flag, int num_dupack,
+			       int *rexmit, const u8 tdn)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	bool recovered = !before(tp->snd_una, td_high_seq(tp));
+	bool recovered = !before(tp->snd_una, td_get_high_seq(tp, tdn));
 
 	if ((flag & FLAG_SND_UNA_ADVANCED || rcu_access_pointer(tp->fastopen_rsk)) &&
-	    tcp_try_undo_loss(sk, false))
+	    tdtcp_try_undo_loss(sk, tdn, false))
 		return;
 
 	if (tp->frto) { /* F-RTO RFC5682 sec 3.1 (sack enhanced version). */
@@ -2930,14 +2952,14 @@ static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
 		 * lost, i.e., never-retransmitted data are (s)acked.
 		 */
 		if ((flag & FLAG_ORIG_SACK_ACKED) &&
-		    tcp_try_undo_loss(sk, true))
+		    tdtcp_try_undo_loss(sk, tdn, true))
 			return;
 
-		if (after(tp->snd_nxt, td_high_seq(tp))) {
+		if (after(tp->snd_nxt, td_get_high_seq(tp, tdn))) {
 			if (flag & FLAG_DATA_SACKED || num_dupack)
 				tp->frto = 0; /* Step 3.a. loss was real */
 		} else if (flag & FLAG_SND_UNA_ADVANCED && !recovered) {
-			set_high_seq(tp, tp->snd_nxt);
+			td_set_high_seq(tp, tdn, tp->snd_nxt);
 			/* Step 2.b. Try send new data (but deferred until cwnd
 			 * is updated in tcp_ack()). Otherwise fall back to
 			 * the conventional recovery.
@@ -2953,14 +2975,14 @@ static void tcp_process_loss(struct sock *sk, int flag, int num_dupack,
 
 	if (recovered) {
 		/* F-RTO RFC5682 sec 3.1 step 2.a and 1st part of step 3.a */
-		tcp_try_undo_recovery(sk);
+		tdtcp_try_undo_recovery(sk, tdn);
 		return;
 	}
 	if (tcp_is_reno(tp)) {
 		/* A Reno DUPACK means new data in F-RTO step 2.b above are
 		 * delivered. Lower inflight to clock out (re)tranmissions.
 		 */
-		if (after(tp->snd_nxt, td_high_seq(tp)) && num_dupack)
+		if (after(tp->snd_nxt, td_get_high_seq(tp, tdn)) && num_dupack)
 			tcp_add_reno_sack(sk, num_dupack);
 		else if (flag & FLAG_SND_UNA_ADVANCED)
 			tcp_reset_reno_sack(tp);
@@ -3153,9 +3175,9 @@ static void tdtcp_fastretrans_alert(struct sock *sk, const u32 prior_snd_una,
 		tdtcp_identify_packet_loss(sk, ack_flag, tdn);
 		break;
 	case TCP_CA_Loss:
-		tcp_process_loss(sk, flag, num_dupack, rexmit);
-		tcp_identify_packet_loss(sk, ack_flag);
-		if (!(td_ca_state(sk) == TCP_CA_Open ||
+		tdtcp_process_loss(sk, flag, num_dupack, rexmit, tdn);
+		tdtcp_identify_packet_loss(sk, ack_flag, tdn);
+		if (!(td_get_ca_state(sk, tdn) == TCP_CA_Open ||
 		      (*ack_flag & FLAG_LOST_RETRANS)))
 			return;
 		/* Change state if cwnd is undone or retransmits are lost */

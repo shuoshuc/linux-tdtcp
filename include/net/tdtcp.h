@@ -247,11 +247,28 @@ static inline const u8 td_icsk_rexmits(const struct sock *sk)
 		TD_ICSK_REXMITS(inet_csk(sk), 0);
 }
 
+/* Return icsk_retransmits of current TDN or the default variable value. */
+static inline const u8 td_get_icsk_rexmits(const struct sock *sk, const u8 tdn_id)
+{
+	return (tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_ICSK_REXMITS(inet_csk(sk), tdn_id) :
+		TD_ICSK_REXMITS(inet_csk(sk), 0);
+}
+
 /* Assign val to icsk_retransmits of current TDN or the default variable. */
 static inline void set_icsk_rexmits(const struct sock *sk, const u8 val)
 {
 	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_ICSK_REXMITS(inet_csk(sk), GET_TDN(tcp_sk(sk))) :
+		&TD_ICSK_REXMITS(inet_csk(sk), 0)) = val;
+}
+
+/* Assign val to icsk_retransmits of given TDN or the default variable. */
+static inline void td_set_icsk_rexmits(const struct sock *sk, const u8 tdn_id,
+				       const u8 val)
+{
+	*((tcp_sk(sk)->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_ICSK_REXMITS(inet_csk(sk), tdn_id) :
 		&TD_ICSK_REXMITS(inet_csk(sk), 0)) = val;
 }
 
