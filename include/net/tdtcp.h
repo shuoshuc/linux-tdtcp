@@ -79,6 +79,8 @@ static inline void SET_SOCK_TDN(struct tcp_sock *tp) {
 /* Macros to help shorten accessing tcp_sock td_subf members. */
 #define TD_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].snd_una
 #define TD_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].snd_nxt
+#define TD_BOUND_LOW(tp, tdn_id) (tp)->td_subf[tdn_id].bound_low
+#define TD_BOUND_HIGH(tp, tdn_id) (tp)->td_subf[tdn_id].bound_high
 #define TD_PREV_UNA(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_una
 #define TD_PREV_NXT(tp, tdn_id) (tp)->td_subf[tdn_id].prev_snd_nxt
 #define TD_CWND(tp, tdn_id) (tp)->td_subf[tdn_id].snd_cwnd
@@ -456,6 +458,34 @@ static inline void set_nxt(struct tcp_sock *tp, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_NXT(tp, GET_TDN(tp)) : &TD_NXT(tp, 0)) = val;
+}
+
+/* Return bound_low of the specified TDN. */
+static inline u32 td_get_bound_low(const struct tcp_sock *tp, const u8 tdn_id)
+{
+    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
+	return TD_BOUND_LOW(tp, tdn_id);
+}
+
+/* Assign val to bound_low of the specified TDN. */
+static inline void td_set_bound_low(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
+	TD_BOUND_LOW(tp, tdn_id) = val;
+}
+
+/* Return bound_high of the specified TDN. */
+static inline u32 td_get_bound_high(const struct tcp_sock *tp, const u8 tdn_id)
+{
+    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
+	return TD_BOUND_HIGH(tp, tdn_id);
+}
+
+/* Assign val to bound_high of the specified TDN. */
+static inline void td_set_bound_high(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
+	TD_BOUND_HIGH(tp, tdn_id) = val;
 }
 
 /* Return snd_ssthresh of current TDN or the default variable value. */

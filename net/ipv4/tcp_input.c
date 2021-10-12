@@ -4080,7 +4080,11 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 
 	if (after(ack, prior_snd_una)) {
 		flag |= FLAG_SND_UNA_ADVANCED;
-		set_icsk_rexmits(sk, 0);
+        for (i = 0; i < num_tdns; i++) {
+            if (after(ack, td_get_bound_low(tp, i))) {
+                td_set_icsk_rexmits(sk, i, 0);
+            }
+        }
 
 #if IS_ENABLED(CONFIG_TLS_DEVICE)
 		if (static_branch_unlikely(&clean_acked_data_enabled.key))

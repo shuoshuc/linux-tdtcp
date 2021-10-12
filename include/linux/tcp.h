@@ -436,6 +436,10 @@ struct tcp_sock {
 		u32	prev_snd_nxt;
 		/* Oldest byte unACKed for the cycle prior to the most recent one */
 		u32	prev_snd_una;
+        /* Boundary pointer to the starting sequence number of this TDN. */
+		u32	bound_low;
+        /* Boundary pointer to the ending sequence number + 1 of this TDN. */
+		u32	bound_high;
 		/* Sending congestion window */
 		u32	snd_cwnd;
 		/* Slow start to cong avoid threshold */
