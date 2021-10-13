@@ -24,15 +24,23 @@ void tdn_update_handler(struct work_struct *work)
 						  tdn_work);
 	WARN_ON(!data);
 	WARN_ON(!data->sk);
+	struct tcp_sock *tp = tcp_sk(data->sk);
+	/* cache the old TDN before updating. */
+	u8 prev_tdn = GET_TDN(tp);
 	/* No need to set same TDN again. This saves locking overhead. */
-	if (data->tdn_id == GET_TDN(tcp_sk(data->sk)))
+	if (data->tdn_id == prev_tdn)
 		goto free;
 
 	lock_sock(data->sk);
-	SET_TDN(tcp_sk(data->sk), data->tdn_id);
+	/* update curr_tdn in sk */
+	SET_TDN(tp, data->tdn_id);
+	/* set bound_low for the current TDN. */
+	td_set_bound_low(tp, data->tdn_id, tp->snd_nxt);
+	/* set bound_high for the previous TDN. */
+	td_set_bound_high(tp, prev_tdn, tp->snd_nxt);
+	release_sock(data->sk);
 	pr_debug("[%s] %llu ns since epoch. sk=%p, tdn=%u.\n",
 		 __FUNCTION__, ktime_get_real_fast_ns(), data->sk, data->tdn_id);
-	release_sock(data->sk);
 
 free:
 	kfree(data);

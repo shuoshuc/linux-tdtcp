@@ -414,7 +414,7 @@ struct tcp_sock {
 	 */
 	/* #if IS_ENABLED(CONFIG_PER_SOCK_TDN) */
 	u8	curr_tdn_id; /* current TDN id the socket is seeing. */
-    /* #endif */
+	/* #endif */
 
 	/* Array of TDTCP subflows, each contains the subflow sequence number
 	 * and congestion control information. Indexed by the current TDN ID.
@@ -436,9 +436,9 @@ struct tcp_sock {
 		u32	prev_snd_nxt;
 		/* Oldest byte unACKed for the cycle prior to the most recent one */
 		u32	prev_snd_una;
-        /* Boundary pointer to the starting sequence number of this TDN. */
+		/* Boundary pointer to the starting sequence number of this TDN. */
 		u32	bound_low;
-        /* Boundary pointer to the ending sequence number + 1 of this TDN. */
+		/* Boundary pointer to the ending sequence number + 1 of this TDN. */
 		u32	bound_high;
 		/* Sending congestion window */
 		u32	snd_cwnd;
