@@ -463,29 +463,31 @@ static inline void set_nxt(struct tcp_sock *tp, u32 val)
 /* Return bound_low of the specified TDN. */
 static inline u32 td_get_bound_low(const struct tcp_sock *tp, const u8 tdn_id)
 {
-    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
-	return TD_BOUND_LOW(tp, tdn_id);
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_BOUND_LOW(tp, tdn_id) : 0;
 }
 
 /* Assign val to bound_low of the specified TDN. */
 static inline void td_set_bound_low(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
-    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
-	TD_BOUND_LOW(tp, tdn_id) = val;
+	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
+		TD_BOUND_LOW(tp, tdn_id) = val;
+	}
 }
 
 /* Return bound_high of the specified TDN. */
 static inline u32 td_get_bound_high(const struct tcp_sock *tp, const u8 tdn_id)
 {
-    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
-	return TD_BOUND_HIGH(tp, tdn_id);
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_BOUND_HIGH(tp, tdn_id) : 0;
 }
 
 /* Assign val to bound_high of the specified TDN. */
 static inline void td_set_bound_high(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
-    BUG_ON(!tp->is_tdtcp || !IS_ENABLED(CONFIG_TDTCP_DEV));
-	TD_BOUND_HIGH(tp, tdn_id) = val;
+	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
+		TD_BOUND_LOW(tp, tdn_id) = val;
+	}
 }
 
 /* Return snd_ssthresh of current TDN or the default variable value. */
