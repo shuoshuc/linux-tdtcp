@@ -34,9 +34,10 @@ void tdn_update_handler(struct work_struct *work)
 	lock_sock(data->sk);
 	/* update curr_tdn in sk */
 	SET_TDN(tp, data->tdn_id);
-	/* set bound_low for the current TDN. */
+	/* initialize bound_low and bound_high for the current TDN. */
 	td_set_bound_low(tp, data->tdn_id, tp->snd_nxt);
-	/* set bound_high for the previous TDN. */
+	td_set_bound_high(tp, data->tdn_id, tp->snd_nxt);
+	/* finalize bound_high for the previous TDN. */
 	td_set_bound_high(tp, prev_tdn, tp->snd_nxt);
 	release_sock(data->sk);
 	pr_debug("[%s] %llu ns since epoch. sk=%p, tdn=%u.\n",
