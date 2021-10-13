@@ -486,7 +486,7 @@ static inline u32 td_get_bound_high(const struct tcp_sock *tp, const u8 tdn_id)
 static inline void td_set_bound_high(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) {
-		TD_BOUND_LOW(tp, tdn_id) = val;
+		TD_BOUND_HIGH(tp, tdn_id) = val;
 	}
 }
 
