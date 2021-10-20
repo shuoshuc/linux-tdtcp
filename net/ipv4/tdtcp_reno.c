@@ -16,7 +16,7 @@ static void tdtcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn_id
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (!tcp_is_cwnd_limited(sk, tdn_id))
+	if (!tdtcp_is_cwnd_limited(sk, tdn_id))
 		return;
 
 	/* In "safe" area, increase. */

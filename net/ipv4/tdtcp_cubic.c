@@ -323,7 +323,7 @@ static void tdtcp_cubic_cong_avoid(struct sock *sk, u32 ack, u32 acked, u8 tdn)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct bictcp *td_bic = inet_csk_ca(sk);
 
-	if (!tcp_is_cwnd_limited(sk, tdn))
+	if (!tdtcp_is_cwnd_limited(sk, tdn))
 		return;
 
 	if (tcp_in_slow_start(tp, tdn)) {

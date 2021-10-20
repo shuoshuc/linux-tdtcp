@@ -1309,7 +1309,7 @@ static inline u32 tcp_wnd_end(const struct tcp_sock *tp)
  * either send more filler packets or data to artificially blow up the cwnd
  * usage, and allow application-limited process to probe bw more aggressively.
  */
-static inline bool tcp_is_cwnd_limited(const struct sock *sk, u8 tdn_id)
+static inline bool tdtcp_is_cwnd_limited(const struct sock *sk, u8 tdn_id)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 

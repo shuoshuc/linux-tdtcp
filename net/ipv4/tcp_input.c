@@ -3732,10 +3732,11 @@ static void tcp_ack_probe(struct sock *sk)
 	}
 }
 
-static inline bool tcp_ack_is_dubious(const struct sock *sk, const int flag)
+static inline bool tdtcp_ack_is_dubious(const struct sock *sk, const int flag,
+					const u8 tdn)
 {
 	return !(flag & FLAG_NOT_DUP) || (flag & FLAG_CA_ALERT) ||
-		td_ca_state(sk) != TCP_CA_Open;
+		td_get_ca_state(sk, tdn) != TCP_CA_Open;
 }
 
 /* Decide wheather to run the increase function of congestion control. */
@@ -4080,11 +4081,11 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 
 	if (after(ack, prior_snd_una)) {
 		flag |= FLAG_SND_UNA_ADVANCED;
-        for (i = 0; i < num_tdns; i++) {
-            if (after(ack, td_get_bound_low(tp, i))) {
-                td_set_icsk_rexmits(sk, i, 0);
-            }
-        }
+		for (i = 0; i < num_tdns; i++) {
+			if (after(ack, td_get_bound_low(tp, i))) {
+				td_set_icsk_rexmits(sk, i, 0);
+			}
+		}
 
 #if IS_ENABLED(CONFIG_TLS_DEVICE)
 		if (static_branch_unlikely(&clean_acked_data_enabled.key))
@@ -4178,7 +4179,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	if (flag & FLAG_SET_XMIT_TIMER)
 		tcp_set_xmit_timer(sk);
 
-	if (tcp_ack_is_dubious(sk, flag)) {
+	if (tdtcp_ack_is_dubious(sk, flag, GET_TDN(tp))) {
 		if (!(flag & (FLAG_SND_UNA_ADVANCED | FLAG_NOT_DUP))) {
 			num_dupack = 1;
 			/* Consider if pure acks were aggregated in tcp_add_backlog() */
