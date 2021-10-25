@@ -387,8 +387,8 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 int tcp_child_process(struct sock *parent, struct sock *child,
 		      struct sk_buff *skb);
 void tcp_enter_loss(struct sock *sk);
-void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int flag,
-			u8 tdn_id);
+void tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked,
+			const struct ack_flags *flag, u8 tdn_id);
 void tcp_clear_retrans(struct tcp_sock *tp);
 void tcp_update_metrics(struct sock *sk);
 void tcp_init_metrics(struct sock *sk);

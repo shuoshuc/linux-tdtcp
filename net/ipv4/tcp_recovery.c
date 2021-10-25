@@ -176,7 +176,7 @@ void tcp_rack_reo_timeout(struct sock *sk)
 		if (td_ca_state(sk) != TCP_CA_Recovery) {
 			tcp_enter_recovery(sk, false);
 			if (!inet_csk(sk)->icsk_ca_ops->cong_control)
-				tcp_cwnd_reduction(sk, 1, 0, GET_TDN(tp));
+				tcp_cwnd_reduction(sk, 1, NULL, GET_TDN(tp));
 		}
 		tcp_xmit_retransmit_queue(sk);
 	}

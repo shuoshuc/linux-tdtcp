@@ -1022,4 +1022,12 @@ struct tdn_work_data {
 
 void tdn_update_handler(struct work_struct *work);
 
+/* struct to hold TCP ACK processing flags. */
+struct ack_flags {
+	/* global flags that shouldn't be kept per-TDN. */
+	int global_flag;
+	/* per-TDN copies of local flags that differs by TDNs. */
+	int tdn_flags[MAX_NUM_TDNS];
+};
+
 #endif /* __NET_TDTCP_H */
