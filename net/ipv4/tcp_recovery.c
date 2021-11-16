@@ -46,7 +46,7 @@ static u32 tcp_rack_reo_wnd(const struct sock *sk)
 	 * smoothed RTT.
 	 */
 	return min((tcp_min_rtt(tp) >> 2) * tp->rack.reo_wnd_steps,
-		   tp->srtt_us >> 3);
+		   td_get_srtt(tp, GET_TDN(tp)) >> 3);
 }
 
 s32 tcp_rack_skb_timeout(struct tcp_sock *tp, struct sk_buff *skb, u32 reo_wnd)

@@ -2154,7 +2154,8 @@ static bool tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb,
 		goto send_now;
 	delta = tp->tcp_clock_cache - head->tstamp;
 	/* If next ACK is likely to come too late (half srtt), do not defer */
-	if ((s64)(delta - (u64)NSEC_PER_USEC * (tp->srtt_us >> 4)) < 0)
+	if ((s64)(delta - (u64)NSEC_PER_USEC *
+		  (td_get_srtt(tp, GET_TDN(tp)) >> 4)) < 0)
 		goto send_now;
 
 	/* Ok, it looks like it is advisable to defer.
@@ -2679,8 +2680,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	 * for delayed ack when there's one outstanding packet. If no RTT
 	 * sample is available then probe after TCP_TIMEOUT_INIT.
 	 */
-	if (tp->srtt_us) {
-		timeout = usecs_to_jiffies(tp->srtt_us >> 2);
+	if (td_get_srtt(tp, GET_TDN(tp))) {
+		timeout = usecs_to_jiffies(td_get_srtt(tp, GET_TDN(tp)) >> 2);
 		if (td_pkts_out(tp) == 1)
 			timeout += TCP_RTO_MIN;
 		else
@@ -3945,8 +3946,9 @@ void tcp_send_delayed_ack(struct sock *sk)
 		 * Do not use inet_csk(sk)->icsk_rto here, use results of rtt measurements
 		 * directly.
 		 */
-		if (tp->srtt_us) {
-			int rtt = max_t(int, usecs_to_jiffies(tp->srtt_us >> 3),
+		if (td_get_srtt(tp, GET_TDN(tp))) {
+			int rtt = max_t(int,
+					usecs_to_jiffies(td_get_srtt(tp, GET_TDN(tp)) >> 3),
 					TCP_DELACK_MIN);
 
 			if (rtt < max_ato)

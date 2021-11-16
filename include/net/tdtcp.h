@@ -977,6 +977,34 @@ static inline unsigned int tdtcp_packets_in_flight(const struct tcp_sock *tp,
 		td_get_retrans_out(tp, tdn_id);
 }
 
+/* Return SRTT of given TDN or the default variable value. */
+static inline u32 td_get_srtt(const struct tcp_sock *tp, const u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_SRTT(tp, tdn_id) : TD_SRTT(tp, 0);
+}
+
+/* Assign val to SRTT of given TDN or the default variable. */
+static inline void td_set_srtt(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_SRTT(tp, tdn_id) : &TD_SRTT(tp, 0)) = val;
+}
+
+/* Return RTTVAR of given TDN or the default variable value. */
+static inline u32 td_get_rttvar(const struct tcp_sock *tp, const u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RTTVAR(tp, tdn_id) : TD_RTTVAR(tp, 0);
+}
+
+/* Assign val to RTTVAR of given TDN or the default variable. */
+static inline void td_set_rttvar(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RTTVAR(tp, tdn_id) : &TD_RTTVAR(tp, 0)) = val;
+}
+
 #else
 
 static inline bool sk_is_tdtcp(const struct sock *sk)

@@ -2720,6 +2720,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd = TCP_INIT_CWND;
 	tp->snd_cwnd_cnt = 0;
+	/* TDTCP subflow init. */
 	if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP)) {
 		for (tdn = 0;
 		     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
@@ -2729,6 +2730,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 			TD_SSTHRESH(tp, tdn) = TCP_INFINITE_SSTHRESH;
 			TD_CWND_CNT(tp, tdn) = 0;
 			TD_DELIVERED(tp, tdn) = 0;
+			TD_SRTT(tp, tdn) = 0;
 		}
 	}
 	tp->window_clamp = 0;

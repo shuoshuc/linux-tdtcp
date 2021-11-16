@@ -678,6 +678,12 @@ static inline u32 __tcp_set_rto(const struct tcp_sock *tp)
 	return usecs_to_jiffies((tp->srtt_us >> 3) + tp->rttvar_us);
 }
 
+static inline u32 __tdtcp_set_rto(const struct tcp_sock *tp, u8 tdn)
+{
+	return usecs_to_jiffies((td_get_srtt(tp, tdn) >> 3) +
+				td_get_rttvar(tp, tdn));
+}
+
 static inline void __tcp_fast_path_on(struct tcp_sock *tp, u32 snd_wnd)
 {
 	tp->pred_flags = htonl((tp->tcp_header_len << 26) |

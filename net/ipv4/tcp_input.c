@@ -875,7 +875,75 @@ static void tcp_rtt_estimator(struct sock *sk, long mrtt_us)
 	tp->srtt_us = max(1U, srtt);
 }
 
-static void tcp_update_pacing_rate(struct sock *sk, const u8 tdn_id)
+static void tdtcp_rtt_estimator(struct sock *sk, u8 tdn, long mrtt_us)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	long m = mrtt_us; /* RTT */
+	u32 srtt = td_get_srtt(tp, tdn);
+
+	/*	The following amusing code comes from Jacobson's
+	 *	article in SIGCOMM '88.  Note that rtt and mdev
+	 *	are scaled versions of rtt and mean deviation.
+	 *	This is designed to be as fast as possible
+	 *	m stands for "measurement".
+	 *
+	 *	On a 1990 paper the rto value is changed to:
+	 *	RTO = rtt + 4 * mdev
+	 *
+	 * Funny. This algorithm seems to be very broken.
+	 * These formulae increase RTO, when it should be decreased, increase
+	 * too slowly, when it should be increased quickly, decrease too quickly
+	 * etc. I guess in BSD RTO takes ONE value, so that it is absolutely
+	 * does not matter how to _calculate_ it. Seems, it was trap
+	 * that VJ failed to avoid. 8)
+	 */
+	if (srtt != 0) {
+		m -= (srtt >> 3);	/* m is now error in rtt est */
+		srtt += m;		/* rtt = 7/8 rtt + 1/8 new */
+		if (m < 0) {
+			m = -m;		/* m is now abs(error) */
+			m -= (tp->mdev_us >> 2);   /* similar update on mdev */
+			/* This is similar to one of Eifel findings.
+			 * Eifel blocks mdev updates when rtt decreases.
+			 * This solution is a bit different: we use finer gain
+			 * for mdev in this case (alpha*beta).
+			 * Like Eifel it also prevents growth of rto,
+			 * but also it limits too fast rto decreases,
+			 * happening in pure Eifel.
+			 */
+			if (m > 0)
+				m >>= 3;
+		} else {
+			m -= (tp->mdev_us >> 2);   /* similar update on mdev */
+		}
+		tp->mdev_us += m;		/* mdev = 3/4 mdev + 1/4 new */
+		if (tp->mdev_us > tp->mdev_max_us) {
+			tp->mdev_max_us = tp->mdev_us;
+			if (tp->mdev_max_us > tp->rttvar_us)
+				tp->rttvar_us = tp->mdev_max_us;
+		}
+		if (after(tp->snd_una, tp->rtt_seq)) {
+			if (tp->mdev_max_us < tp->rttvar_us)
+				tp->rttvar_us -= (tp->rttvar_us - tp->mdev_max_us) >> 2;
+			tp->rtt_seq = tp->snd_nxt;
+			tp->mdev_max_us = tcp_rto_min_us(sk);
+
+			tcp_bpf_rtt(sk);
+		}
+	} else {
+		/* no previous measure. */
+		srtt = m << 3;		/* take the measured time to be rtt */
+		tp->mdev_us = m << 1;	/* make sure rto = 3*rtt */
+		tp->rttvar_us = max(tp->mdev_us, tcp_rto_min_us(sk));
+		tp->mdev_max_us = tp->rttvar_us;
+		tp->rtt_seq = tp->snd_nxt;
+
+		tcp_bpf_rtt(sk);
+	}
+	td_set_srtt(tp, tdn, max(1U, srtt));
+}
+
+static void tdtcp_update_pacing_rate(struct sock *sk, const u8 tdn_id)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	u64 rate;
@@ -898,8 +966,8 @@ static void tcp_update_pacing_rate(struct sock *sk, const u8 tdn_id)
 
 	rate *= max(td_get_cwnd(tp, tdn_id), td_get_pkts_out(tp, tdn_id));
 
-	if (likely(tp->srtt_us))
-		do_div(rate, tp->srtt_us);
+	if (likely(td_get_srtt(tp, tdn_id)))
+		do_div(rate, td_get_srtt(tp, tdn_id));
 
 	/* WRITE_ONCE() is needed because sch_fq fetches sk_pacing_rate
 	 * without any lock. We want to make sure compiler wont store
@@ -2249,7 +2317,7 @@ static bool tdtcp_check_sack_reneging(struct sock *sk, u8 tdn,
 {
 	if (test_ack_flags(flag, tdn, FLAG_SACK_RENEGING)) {
 		struct tcp_sock *tp = tcp_sk(sk);
-		unsigned long delay = max(usecs_to_jiffies(tp->srtt_us >> 4),
+		unsigned long delay = max(usecs_to_jiffies(td_get_srtt(tp, tdn) >> 4),
 					  msecs_to_jiffies(10));
 
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
@@ -3828,7 +3896,7 @@ static void tcp_cong_control(struct sock *sk, u32 ack, u32 acked_sacked,
 		/* Advance cwnd if state allows */
 		tcp_cong_avoid(sk, ack, acked_sacked, tdn_id);
 	}
-	tcp_update_pacing_rate(sk, tdn_id);
+	tdtcp_update_pacing_rate(sk, tdn_id);
 }
 
 /* Check that window update is acceptable.
@@ -5926,8 +5994,8 @@ send_now:
 	/* compress ack timer : 5 % of rtt, but no more than tcp_comp_sack_delay_ns */
 
 	rtt = tp->rcv_rtt_est.rtt_us;
-	if (tp->srtt_us && tp->srtt_us < rtt)
-		rtt = tp->srtt_us;
+	if (td_get_srtt(tp, GET_TDN(tp)) && td_get_srtt(tp, GET_TDN(tp)) < rtt)
+		rtt = td_get_srtt(tp, GET_TDN(tp));
 
 	delay = min_t(unsigned long, sock_net(sk)->ipv4.sysctl_tcp_comp_sack_delay_ns,
 		      rtt * (NSEC_PER_USEC >> 3)/20);
@@ -6914,7 +6982,8 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 	case TCP_SYN_RECV:
 		/* SYN-ACK delivery isn't tracked in tcp_ack */
 		set_delivered(tp, td_delivered(tp) + 1);
-		if (!tp->srtt_us)
+		/* TODO: look at SRTTs for all TDNs? */
+		if (!td_get_srtt(tp, GET_TDN(tp)))
 			tcp_synack_rtt_meas(sk, req);
 
 		if (req) {
@@ -6944,7 +7013,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 
 		if (!inet_csk(sk)->icsk_ca_ops->cong_control)
-			tcp_update_pacing_rate(sk, GET_TDN(tp));
+			tdtcp_update_pacing_rate(sk, GET_TDN(tp));
 
 		/* Prevent spurious tcp_cwnd_restart() on first data packet */
 		tp->lsndtime = tcp_jiffies32;

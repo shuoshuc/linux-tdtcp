@@ -425,7 +425,8 @@ void tcp_ld_RTO_revert(struct sock *sk, u32 seq)
 		return;
 
 	icsk->icsk_backoff--;
-	set_icsk_rto(sk, tp->srtt_us ? __tcp_set_rto(tp) : TCP_TIMEOUT_INIT);
+	set_icsk_rto(sk, td_get_srtt(tp, GET_TDN(tp)) ? __tcp_set_rto(tp) :
+							TCP_TIMEOUT_INIT);
 	set_icsk_rto(sk, inet_csk_rto_backoff(icsk, td_icsk_rto(sk), TCP_RTO_MAX));
 
 	tcp_mstamp_refresh(tp);
