@@ -484,6 +484,20 @@ struct tcp_sock {
 		u32	high_seq;
 		/* snd_una upon a new recovery episode. */
 		u32	undo_marker;
+
+		/* most recent packet received/sent */
+		u64	tcp_mstamp;
+		/* smoothed round trip time << 3 in usecs */
+		u32	srtt_us;
+		/* medium deviation */
+		u32	mdev_us;
+		/* maximal mdev for the last rtt period	*/
+		u32	mdev_max_us;
+		/* smoothed mdev_max */
+		u32	rttvar_us;
+		/* sequence number to update rttvar */
+		u32	rtt_seq;
+		//struct  minmax rtt_min;
 	} td_subf[MAX_NUM_TDNS];
 #endif
 

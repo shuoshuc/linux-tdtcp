@@ -105,6 +105,10 @@ static inline void SET_SOCK_TDN(struct tcp_sock *tp) {
 #define TD_REORDERING(tp, tdn_id) (tp)->td_subf[tdn_id].reordering
 #define TD_HIGH_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].high_seq
 #define TD_UNDO_MARKER(tp, tdn_id) (tp)->td_subf[tdn_id].undo_marker
+#define TD_SRTT(tp, tdn_id) (tp)->td_subf[tdn_id].srtt_us
+#define TD_MDEV(tp, tdn_id) (tp)->td_subf[tdn_id].mdev_us
+#define TD_MDEV_MAX(tp, tdn_id) (tp)->td_subf[tdn_id].mdev_max_us
+#define TD_RTTVAR(tp, tdn_id) (tp)->td_subf[tdn_id].rttvar_us
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
