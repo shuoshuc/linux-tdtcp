@@ -902,7 +902,7 @@ static void tdtcp_rtt_estimator(struct sock *sk, u8 tdn, long mrtt_us)
 		srtt += m;		/* rtt = 7/8 rtt + 1/8 new */
 		if (m < 0) {
 			m = -m;		/* m is now abs(error) */
-			m -= (tp->mdev_us >> 2);   /* similar update on mdev */
+			m -= (td_get_mdev(tp, tdn) >> 2);   /* similar update on mdev */
 			/* This is similar to one of Eifel findings.
 			 * Eifel blocks mdev updates when rtt decreases.
 			 * This solution is a bit different: we use finer gain
@@ -914,29 +914,33 @@ static void tdtcp_rtt_estimator(struct sock *sk, u8 tdn, long mrtt_us)
 			if (m > 0)
 				m >>= 3;
 		} else {
-			m -= (tp->mdev_us >> 2);   /* similar update on mdev */
+			m -= (td_get_mdev(tp, tdn) >> 2);   /* similar update on mdev */
 		}
-		tp->mdev_us += m;		/* mdev = 3/4 mdev + 1/4 new */
-		if (tp->mdev_us > tp->mdev_max_us) {
-			tp->mdev_max_us = tp->mdev_us;
-			if (tp->mdev_max_us > tp->rttvar_us)
-				tp->rttvar_us = tp->mdev_max_us;
+		/* mdev = 3/4 mdev + 1/4 new */
+		td_set_mdev(tp, tdn, td_get_mdev(tp, tdn) + m);
+		if (td_get_mdev(tp, tdn) > td_get_mdev_max(tp, tdn)) {
+			td_set_mdev_max(tp, tdn, td_get_mdev(tp, tdn));
+			if (td_get_mdev_max(tp, tdn) > td_get_rttvar(tp, tdn))
+				td_set_rttvar(tp, tdn, td_get_mdev_max(tp, tdn));
 		}
-		if (after(tp->snd_una, tp->rtt_seq)) {
-			if (tp->mdev_max_us < tp->rttvar_us)
-				tp->rttvar_us -= (tp->rttvar_us - tp->mdev_max_us) >> 2;
-			tp->rtt_seq = tp->snd_nxt;
-			tp->mdev_max_us = tcp_rto_min_us(sk);
+		if (after(tp->snd_una, td_get_rtt_seq(tp, tdn))) {
+			if (td_get_mdev_max(tp, tdn) < td_get_rttvar(tp, tdn))
+				td_set_rttvar(tp, tdn, td_get_rttvar(tp, tdn) -
+					      (td_get_rttvar(tp, tdn) -
+					       td_get_mdev_max(tp, tdn)) >> 2);
+			td_set_rtt_seq(tp, tdn, tp->snd_nxt);
+			td_set_mdev_max(tp, tdn, tcp_rto_min_us(sk));
 
 			tcp_bpf_rtt(sk);
 		}
 	} else {
 		/* no previous measure. */
 		srtt = m << 3;		/* take the measured time to be rtt */
-		tp->mdev_us = m << 1;	/* make sure rto = 3*rtt */
-		tp->rttvar_us = max(tp->mdev_us, tcp_rto_min_us(sk));
-		tp->mdev_max_us = tp->rttvar_us;
-		tp->rtt_seq = tp->snd_nxt;
+		td_set_mdev(tp, tdn, m << 1); /* make sure rto = 3*rtt */
+		td_set_rttvar(tp, tdn, max(td_get_mdev(tp, tdn),
+					   tcp_rto_min_us(sk)));
+		td_set_mdev_max(tp, tdn, td_get_rttvar(tp, tdn));
+		td_set_rtt_seq(tp, tdn, tp->snd_nxt);
 
 		tcp_bpf_rtt(sk);
 	}

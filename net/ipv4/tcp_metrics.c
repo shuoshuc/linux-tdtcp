@@ -371,8 +371,8 @@ void tcp_update_metrics(struct sock *sk)
 
 		/* Scale deviation to rttvar fixed point */
 		m >>= 1;
-		if (m < tp->mdev_us)
-			m = tp->mdev_us;
+		if (m < td_get_mdev(tp, GET_TDN(tp)))
+			m = td_get_mdev(tp, GET_TDN(tp));
 
 		var = tcp_metric_get(tm, TCP_METRIC_RTTVAR);
 		if (m >= var)
@@ -447,6 +447,7 @@ void tcp_init_metrics(struct sock *sk)
 	struct net *net = sock_net(sk);
 	struct tcp_metrics_block *tm;
 	u32 val, crtt = 0; /* cached RTT scaled by 8 */
+	u8 tdn;
 
 	sk_dst_confirm(sk);
 	if (!dst)
@@ -512,8 +513,16 @@ reset:
 		 * from the more aggressive 1sec to avoid more spurious
 		 * retransmission.
 		 */
-		tp->rttvar_us = jiffies_to_usecs(TCP_TIMEOUT_FALLBACK);
-		tp->mdev_us = tp->mdev_max_us = tp->rttvar_us;
+		if (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP)) {
+			for (tdn = 0;
+			     tdn < sizeof(tp->td_subf) / sizeof(tp->td_subf[0]);
+			     tdn++) {
+				td_set_rttvar(tp, tdn,
+					      jiffies_to_usecs(TCP_TIMEOUT_FALLBACK));
+				td_set_mdev(tp, tdn, td_get_rttvar(tp, tdn));
+				td_set_mdev_max(tp, tdn, td_get_rttvar(tp, tdn));
+			}
+		}
 
 		set_icsk_rto(sk, TCP_TIMEOUT_FALLBACK);
 	}

@@ -109,6 +109,7 @@ static inline void SET_SOCK_TDN(struct tcp_sock *tp) {
 #define TD_MDEV(tp, tdn_id) (tp)->td_subf[tdn_id].mdev_us
 #define TD_MDEV_MAX(tp, tdn_id) (tp)->td_subf[tdn_id].mdev_max_us
 #define TD_RTTVAR(tp, tdn_id) (tp)->td_subf[tdn_id].rttvar_us
+#define TD_RTT_SEQ(tp, tdn_id) (tp)->td_subf[tdn_id].rtt_seq
 
 struct tdtcp_out_options {
 #if IS_ENABLED(CONFIG_TDTCP)
@@ -991,6 +992,34 @@ static inline void td_set_srtt(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 		&TD_SRTT(tp, tdn_id) : &TD_SRTT(tp, 0)) = val;
 }
 
+/* Return MDEV of given TDN or the default variable value. */
+static inline u32 td_get_mdev(const struct tcp_sock *tp, const u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_MDEV(tp, tdn_id) : TD_MDEV(tp, 0);
+}
+
+/* Assign val to MDEV of given TDN or the default variable. */
+static inline void td_set_mdev(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_MDEV(tp, tdn_id) : &TD_MDEV(tp, 0)) = val;
+}
+
+/* Return MDEV_MAX of given TDN or the default variable value. */
+static inline u32 td_get_mdev_max(const struct tcp_sock *tp, const u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_MDEV_MAX(tp, tdn_id) : TD_MDEV_MAX(tp, 0);
+}
+
+/* Assign val to MDEV_MAX of given TDN or the default variable. */
+static inline void td_set_mdev_max(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_MDEV_MAX(tp, tdn_id) : &TD_MDEV_MAX(tp, 0)) = val;
+}
+
 /* Return RTTVAR of given TDN or the default variable value. */
 static inline u32 td_get_rttvar(const struct tcp_sock *tp, const u8 tdn_id)
 {
@@ -1003,6 +1032,20 @@ static inline void td_set_rttvar(struct tcp_sock *tp, const u8 tdn_id, u32 val)
 {
 	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
 		&TD_RTTVAR(tp, tdn_id) : &TD_RTTVAR(tp, 0)) = val;
+}
+
+/* Return RTT_SEQ of given TDN or the default variable value. */
+static inline u32 td_get_rtt_seq(const struct tcp_sock *tp, const u8 tdn_id)
+{
+	return (tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		TD_RTT_SEQ(tp, tdn_id) : TD_RTT_SEQ(tp, 0);
+}
+
+/* Assign val to RTT_SEQ of given TDN or the default variable. */
+static inline void td_set_rtt_seq(struct tcp_sock *tp, const u8 tdn_id, u32 val)
+{
+	*((tp->is_tdtcp && IS_ENABLED(CONFIG_TDTCP_DEV)) ?
+		&TD_RTT_SEQ(tp, tdn_id) : &TD_RTT_SEQ(tp, 0)) = val;
 }
 
 #else

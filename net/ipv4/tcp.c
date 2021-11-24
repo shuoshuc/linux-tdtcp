@@ -465,6 +465,7 @@ void tcp_init_sock(struct sock *sk)
 		TD_CWND(tp, i) = TCP_INIT_CWND;
 		TD_SSTHRESH(tp, i) = TCP_INFINITE_SSTHRESH;
 		TD_REORDERING(tp, i) = sock_net(sk)->ipv4.sysctl_tcp_reordering;
+		TD_MDEV(tp, i) = jiffies_to_usecs(TCP_TIMEOUT_INIT);
 	}
 #endif
 }
@@ -2731,6 +2732,7 @@ int tcp_disconnect(struct sock *sk, int flags)
 			TD_CWND_CNT(tp, tdn) = 0;
 			TD_DELIVERED(tp, tdn) = 0;
 			TD_SRTT(tp, tdn) = 0;
+			TD_MDEV(tp, tdn) = jiffies_to_usecs(TCP_TIMEOUT_INIT);
 		}
 	}
 	tp->window_clamp = 0;
