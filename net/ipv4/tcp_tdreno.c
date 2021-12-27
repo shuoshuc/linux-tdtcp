@@ -46,7 +46,7 @@ static u32 tdtcp_reno_undo_cwnd(struct sock *sk, const u8 tdn)
 
 static struct tcp_congestion_ops tdtcp_reno __read_mostly = {
 	.flags		= TCP_CONG_NON_RESTRICTED,
-	.name		= "tdtcp_reno",
+	.name		= "tdreno",
 	.owner		= THIS_MODULE,
 	.ssthresh	= tdtcp_reno_ssthresh,
 	.cong_avoid	= tdtcp_reno_cong_avoid,

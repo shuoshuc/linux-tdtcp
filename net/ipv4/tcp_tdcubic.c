@@ -494,7 +494,7 @@ static struct tcp_congestion_ops tdtcp_cubic __read_mostly = {
 	.cwnd_event	= tdtcp_cubic_cwnd_event,
 	.pkts_acked     = tdtcp_cubic_acked,
 	.owner		= THIS_MODULE,
-	.name		= "tdtcp_cubic",
+	.name		= "tdcubic",
 };
 
 static int __init tdtcp_cubic_register(void)

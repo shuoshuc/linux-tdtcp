@@ -669,23 +669,23 @@ config TCP_CONG_BBR
 	  bufferbloat, policers, or AQM schemes that do not provide a delay
 	  signal. It requires the fq ("Fair Queue") pacing packet scheduler.
 
-config TCP_CONG_TDTCP_RENO
+config TCP_CONG_TDRENO
 	tristate "TDTCP Reno"
 	default y
 	help
 
 	  TDTCP Reno is TCP Reno CCA customized for TDTCP.
 
-config TCP_CONG_TDTCP_CUBIC
+config TCP_CONG_TDCUBIC
 	tristate "TDTCP CUBIC"
-	default n
+	default y
 	help
 
 	  TDTCP CUBIC is TCP CUBIC CCA customized for TDTCP.
 
 choice
 	prompt "Default TCP congestion control"
-	default DEFAULT_TDTCP_RENO
+	default DEFAULT_TDCUBIC
 	help
 	  Select the TCP congestion control that will be used by default
 	  for all connections.
@@ -720,11 +720,11 @@ choice
 	config DEFAULT_BBR
 		bool "BBR" if TCP_CONG_BBR=y
 
-	config DEFAULT_TDTCP_RENO
-		bool "TDTCP_Reno" if TCP_CONG_TDTCP_RENO=y
+	config DEFAULT_TDRENO
+		bool "TDTCP Reno" if TCP_CONG_TDRENO=y
 
-	config DEFAULT_TDTCP_CUBIC
-		bool "TDTCP_CUBIC" if TCP_CONG_TDTCP_CUBIC=y
+	config DEFAULT_TDCUBIC
+		bool "TDTCP CUBIC" if TCP_CONG_TDCUBIC=y
 
 	config DEFAULT_RENO
 		bool "Reno"
@@ -750,6 +750,8 @@ config DEFAULT_TCP_CONG
 	default "dctcp" if DEFAULT_DCTCP
 	default "cdg" if DEFAULT_CDG
 	default "bbr" if DEFAULT_BBR
+	default "tdreno" if DEFAULT_TDRENO
+	default "tdcubic" if DEFAULT_TDCUBIC
 	default "cubic"
 
 config TCP_MD5SIG
