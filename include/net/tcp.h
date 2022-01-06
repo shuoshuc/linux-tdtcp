@@ -74,8 +74,15 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 /* Specify interval when tcp mtu probing will stop */
 #define TCP_PROBE_THRESHOLD	8
 
+/* A more tolerant reordering threshold for reconfigurable DCN environments. */
+#define TDTCP_FASTRETRANS_THRESH 10
+
 /* After receiving this amount of duplicate ACKs fast retransmit starts. */
+#if IS_ENABLED(CONFIG_TDTCP)
+#define TCP_FASTRETRANS_THRESH TDTCP_FASTRETRANS_THRESH
+#else
 #define TCP_FASTRETRANS_THRESH 3
+#endif
 
 /* Maximal number of ACKs sent quickly to accelerate slow-start. */
 #define TCP_MAX_QUICKACKS	16U
