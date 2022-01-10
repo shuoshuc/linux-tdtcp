@@ -179,6 +179,14 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 					 * timestamps. It must be less than
 					 * minimal timewait lifetime.
 					 */
+
+/* Disable ECN in TDTCP since there is no support currently. */
+#if IS_ENABLED(CONFIG_TDTCP)
+#define TCP_ECN 0
+#else
+#define TCP_ECN 2
+#endif
+
 /*
  *	TCP option
  */
