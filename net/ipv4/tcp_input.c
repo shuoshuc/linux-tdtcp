@@ -1070,11 +1070,22 @@ static void tdtcp_check_sack_reordering(struct sock *sk, const u32 low_seq,
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	const u32 mss = tp->mss_cache;
-	u32 fack, metric;
+	u32 fack, metric, bound_high, left, right;
+	int num_reord = 0;
 
 	fack = tcp_highest_sack_seq(tp);
 	if (!before(low_seq, fack))
 		return;
+	/* Data not transmitted cannot be SACKed. */
+	if (before(tp->snd_nxt, fack))
+		return;
+	/* TDN passed in is current, bound_high is not set on tp, should be the
+	 * current snd_nxt.
+	 */
+	bound_high = (GET_TDN(tp) == tdn) ?
+		tp->snd_nxt : td_get_bound_high(tp, tdn);
+	left = max_t(u32, td_get_bound_low(tp, tdn), low_seq);
+	right = min_t(u32, bound_high, fack);
 
 	metric = fack - low_seq;
 	if ((metric > td_get_reordering(tp, tdn) * mss) && mss) {
@@ -1085,6 +1096,10 @@ static void tdtcp_check_sack_reordering(struct sock *sk, const u32 low_seq,
 
 	/* This exciting event is worth to be remembered. 8) */
 	tp->reord_seen++;
+	if (sk_is_tdtcp(sk) && IS_ENABLED(CONFIG_PER_SOCK_TDN)) {
+		pr_debug("Confirmed reordering on sk=%p, tdn=%u, num_reord=%d.",
+			 sk, tdn, (right - left) / mss);
+	}
 	NET_INC_STATS(sock_net(sk),
 		      ts ? LINUX_MIB_TCPTSREORDER : LINUX_MIB_TCPSACKREORDER);
 }
@@ -2110,7 +2125,7 @@ advance_sp:
 		tp->recv_sack_cache[i++] = sp[j];
 
 	if (td_ca_state(sk) != TCP_CA_Loss || td_undo_marker(tp))
-		tcp_check_sack_reordering(sk, state->reord, 0);
+		tdtcp_check_sack_reordering(sk, state->reord, 0, GET_TDN(tp));
 
 	tcp_verify_left_out(tp);
 out:
