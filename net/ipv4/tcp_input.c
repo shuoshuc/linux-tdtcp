@@ -1071,7 +1071,6 @@ static void tdtcp_check_sack_reordering(struct sock *sk, const u32 low_seq,
 	struct tcp_sock *tp = tcp_sk(sk);
 	const u32 mss = tp->mss_cache;
 	u32 fack, metric, bound_high, left, right;
-	int num_reord = 0;
 
 	fack = tcp_highest_sack_seq(tp);
 	if (!before(low_seq, fack))
